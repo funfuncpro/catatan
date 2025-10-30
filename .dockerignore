@@ -1,0 +1,76 @@
+# flyctl launch added from .gitignore
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Dependencies
+**/node_modules
+**/.pnp
+**/.pnp.js
+
+# Local env files
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
+
+# Testing
+**/coverage
+
+# Turbo
+**/.turbo
+
+# Vercel
+**/.vercel
+
+# Build Outputs
+**/.next
+**/out
+**/build
+**/dist
+
+
+# Debug
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Misc
+**/.DS_Store
+**/*.pem
+
+# flyctl launch added from apps/auth/.gitignore
+# dependencies (bun install)
+apps/auth/**/node_modules
+
+# output
+apps/auth/**/out
+apps/auth/**/dist
+apps/auth/**/*.tgz
+
+# code coverage
+apps/auth/**/coverage
+apps/auth/**/*.lcov
+
+# logs
+apps/auth/**/logs
+apps/auth/**/_.log
+apps/auth/**/report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+apps/auth/**/.env
+apps/auth/**/.env.development.local
+apps/auth/**/.env.test.local
+apps/auth/**/.env.production.local
+apps/auth/**/.env.local
+
+# caches
+apps/auth/**/.eslintcache
+apps/auth/**/.cache
+apps/auth/**/*.tsbuildinfo
+
+# IntelliJ based IDEs
+apps/auth/**/.idea
+
+# Finder (MacOS) folder config
+apps/auth/**/.DS_Store
+fly.toml

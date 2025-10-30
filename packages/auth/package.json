@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@catatan/auth",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@openauthjs/openauth": "^0.4.3",
+    "valibot": "^1.1.0"
+  },
+  "devDependencies": {
+    "@tsconfig/bun": "^1.0.9",
+    "@types/bun": "^1.3.1",
+    "@types/node": "^24.9.2",
+    "typescript": "5.9.2"
+  }
+}
