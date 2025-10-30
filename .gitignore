@@ -65,5 +65,19 @@ erl_crash.dump
 
 # Ignore package tarball (built via "mix hex.build").
 catatan_backend-*.tar
-
 .expert
+
+dist
+dist-ssr
+
+*.local
+count.txt
+.env
+.nitro
+
+.tanstack
+.wrangler
+
+.output
+.vinxi
+todos.json

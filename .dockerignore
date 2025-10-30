@@ -40,28 +40,44 @@
 
 # flyctl launch added from apps/auth/.gitignore
 # dependencies (bun install)
-apps/auth/**/node_modules
-
+packages/auth/**/node_modules
+packages/catatan_frontend/**/node_modules
 # output
-apps/auth/**/out
-apps/auth/**/dist
-apps/auth/**/*.tgz
+packages/auth/**/out
+packages/auth/**/dist
+packages/auth/**/*.tgz
 
 # code coverage
-apps/auth/**/coverage
-apps/auth/**/*.lcov
+packages/auth/**/coverage
+packages/auth/**/*.lcov
 
 # logs
-apps/auth/**/logs
-apps/auth/**/_.log
-apps/auth/**/report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+packages/auth/**/logs
+packages/auth/**/_.log
+packages/auth/**/report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
-apps/auth/**/.env
-apps/auth/**/.env.development.local
-apps/auth/**/.env.test.local
-apps/auth/**/.env.production.local
-apps/auth/**/.env.local
+packages/auth/**/.env
+packages/auth/**/.env.development.local
+packages/auth/**/.env.test.local
+packages/auth/**/.env.production.local
+packages/auth/**/.env.local
+
+
+# dotenv environment variable files
+packages/catatan_frontend/**/.env
+packages/catatan_frontend/**/.env.development.local
+packages/catatan_frontend/**/.env.test.local
+packages/catatan_frontend/**/.env.production.local
+packages/catatan_frontend/**/.env.local
+
+
+# dotenv environment variable files
+packages/catatan_backend/**/.env
+packages/catatan_backend/**/.env.development.local
+packages/catatan_backend/**/.env.test.local
+packages/catatan_backend/**/.env.production.local
+packages/catatan_backend/**/.env.local
 
 # caches
 apps/auth/**/.eslintcache
@@ -73,4 +89,41 @@ apps/auth/**/.idea
 
 # Finder (MacOS) folder config
 apps/auth/**/.DS_Store
-fly.toml
+
+infra/auth/fly.toml
+infra/frontend/fly.toml
+infra/backend/fly.toml
+
+# https://docs.docker.com/engine/reference/builder/#dockerignore-file
+
+.dockerignore
+
+# Ignore git, but keep git HEAD and refs to access current commit hash if needed:
+#
+# $ cat .git/HEAD | awk '{print ".git/"$2}' | xargs cat
+# d0b8727759e1e0e7aa3d41707d12376e373d5ecc
+.git
+!.git/HEAD
+!.git/refs
+
+# Common development/test artifacts
+packages/catatan_backend/cover/
+packages/catatan_backend/doc/
+packages/catatan_backend/test/
+packages/catatan_backend/tmp/
+packages/catatan_backend/.elixir_ls
+packages/catatan_backend/.expert
+
+# Mix artifacts
+packages/catatan_backend/_build/
+packages/catatan_backend/deps/
+*.ez
+
+# Generated on crash by the VM
+packages/catatan_backend/erl_crash.dump
+
+# Static artifacts - These should be fetched and built inside the Docker image
+# https://hexdocs.pm/phoenix/Mix.Tasks.Phx.Gen.Release.html#module-docker
+packages/catatan_backend/assets/node_modules/
+packages/catatan_backend/priv/static/assets/
+packages/catatan_backend/priv/static/cache_manifest.json
