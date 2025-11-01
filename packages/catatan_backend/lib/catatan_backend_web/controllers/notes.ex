@@ -20,4 +20,21 @@ defmodule CatatanBackendWeb.NotesController do
         json(conn, %{status: "error", message: reason})
     end
   end
+
+  def get_by_id(conn, %{"note_id" => note_id}) do
+    case CatatanBackend.Notes.Get.get_by_id(note_id) do
+      {:ok, note} ->
+        json(conn, %{status: "success", data: note})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{status: "error", message: "Note not found"})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> json(%{status: "error", message: "Internal server error"})
+    end
+  end
 end
