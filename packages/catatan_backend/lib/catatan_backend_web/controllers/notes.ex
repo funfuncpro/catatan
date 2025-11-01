@@ -1,23 +1,30 @@
 defmodule CatatanBackendWeb.NotesController do
   use CatatanBackendWeb, :controller
+  alias CatatanBackendWeb.NotesValidator
+  alias CatatanBackendWeb.Response
+  alias CatatanBackend.Notes
 
-  def test_user(conn, _params) do
-    case CatatanBackend.Notes.Create.test_user() do
-      {:ok, notes} ->
-        json(conn, %{status: "success", data: notes, message: "User created successfully"})
+  action_fallback CatatanBackendWeb.FallbackController
 
-      {:error, reason} ->
-        json(conn, %{status: "error", message: reason})
-    end
-  end
+  def create(conn, params) do
+    case NotesValidator.validate_notes_creation(params) do
+      {:ok, validated_data} ->
+        case Notes.create_note(validated_data.content) do
+          {:ok, note} ->
+            conn
+            |> put_status(:created)
+            |> Response.success_response("Note created successfully", note)
 
-  def get_test_user(conn, _params) do
-    case CatatanBackend.Notes.Create.get_test_user() do
-      {:ok, users} ->
-        json(conn, %{status: "success", data: users, message: "Users retrieved successfully"})
+          {:error, reason} ->
+            conn
+            |> put_status(:internal_server_error)
+            |> Response.error_response("Failed to create note", %{reason: reason})
+        end
 
-      {:error, reason} ->
-        json(conn, %{status: "error", message: reason})
+      {:error, errors} ->
+        conn
+        |> put_status(:bad_request)
+        |> Response.error_response("Bad Request", errors)
     end
   end
 end
