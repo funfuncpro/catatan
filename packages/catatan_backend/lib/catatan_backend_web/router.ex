@@ -9,6 +9,8 @@ defmodule CatatanBackendWeb.Router do
     pipe_through :api
 
     get "/v1/", HelloController, :index
+    post "/v1/test-user", NotesController, :test_user
+    get "/v1/test-user", NotesController, :get_test_user
   end
 
   # Enable Swoosh mailbox preview in development

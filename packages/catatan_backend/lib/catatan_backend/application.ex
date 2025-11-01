@@ -11,6 +11,12 @@ defmodule CatatanBackend.Application do
       CatatanBackendWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:catatan_backend, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: CatatanBackend.PubSub},
+      {Xandra,
+       Keyword.put(
+         Application.get_env(:catatan_backend, CatatanBackend.CassandraClient),
+         :name,
+         :xandra_connection
+       )},
       # Start a worker by calling: CatatanBackend.Worker.start_link(arg)
       # {CatatanBackend.Worker, arg},
       # Start to serve requests, typically the last entry
