@@ -1,4 +1,12 @@
 defmodule CatatanBackend.Notes.All do
+  @moduledoc """
+  Internal module responsible for retrieving all notes from the database.
+  """
+
+  @doc """
+  Retrieves all notes from the database.
+  """
+  @spec all() :: {:ok, list(map())} | {:error, term()}
   def all() do
     query = "SELECT note_id, content, created_at, updated_at FROM notes_by_id"
 

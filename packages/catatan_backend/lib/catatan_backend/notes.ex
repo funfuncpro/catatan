@@ -3,6 +3,7 @@ defmodule CatatanBackend.Notes do
   alias CatatanBackend.Notes.Create
   alias CatatanBackend.Notes.Update
   alias CatatanBackend.Notes.Get
+  alias CatatanBackend.Notes.All
 
   @moduledoc """
   Public module for Notes context in the CatatanBackend application.
@@ -34,5 +35,13 @@ defmodule CatatanBackend.Notes do
   @spec get_note_by_id(String.t()) :: {:ok, map()} | {:error, :not_found}
   def get_note_by_id(note_id) do
     Get.by_id(note_id)
+  end
+
+  @doc """
+  Retrieves all notes.
+  """
+  @spec list_notes() :: {:ok, list(map())} | {:error, term()}
+  def list_notes do
+    All.all()
   end
 end

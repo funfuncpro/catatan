@@ -4,6 +4,10 @@ defmodule CatatanBackendWeb.NotesController do
   alias CatatanBackendWeb.Response
   alias CatatanBackend.Notes
 
+  @moduledoc """
+  Controller for handling note-related API requests.
+  """
+
   action_fallback CatatanBackendWeb.FallbackController
 
   def create(conn, params) do
@@ -41,8 +45,11 @@ defmodule CatatanBackendWeb.NotesController do
       end
   end
 
+  @doc """
+  Handles the API request to retrieve all notes.
+  """
   def index(conn, _params) do
-    case CatatanBackend.Notes.All.all() do
+    case Notes.list_notes() do
       {:ok, notes} ->
         Response.success_response(conn, "success", %{notes: notes})
 
@@ -53,8 +60,11 @@ defmodule CatatanBackendWeb.NotesController do
     end
   end
 
+  @doc """
+  Handles the API request to retrieve a single note by its ID.
+  """
   def show(conn, %{"id" => note_id}) do
-    case CatatanBackend.Notes.Get.by_id(note_id) do
+    case Notes.get_note_by_id(note_id) do
       {:ok, note} ->
         Response.success_response(conn, "success", note)
 

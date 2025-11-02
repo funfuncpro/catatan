@@ -1,4 +1,12 @@
 defmodule CatatanBackend.Notes.Get do
+  @moduledoc """
+  Internal module responsible for retrieving notes from the database.
+  """
+
+  @doc """
+  Retrieves a single note from the database by its ID.
+  """
+  @spec by_id(String.t()) :: {:ok, map()} | {:error, :not_found}
   def by_id(note_id) do
     query = "SELECT note_id, content, created_at, updated_at FROM notes_by_id WHERE note_id = :note_id"
     params = %{"note_id" => note_id}
