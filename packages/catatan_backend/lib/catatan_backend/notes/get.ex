@@ -8,7 +8,9 @@ defmodule CatatanBackend.Notes.Get do
   """
   @spec by_id(String.t()) :: {:ok, map()} | {:error, :not_found}
   def by_id(note_id) do
-    query = "SELECT note_id, content, created_at, updated_at FROM notes_by_id WHERE note_id = :note_id"
+    query =
+      "SELECT note_id, content, created_at, updated_at FROM notes_by_id WHERE note_id = :note_id"
+
     params = %{"note_id" => note_id}
 
     with {:ok, prepared} <- CatatanBackend.CassandraClient.prepare(query),
@@ -16,7 +18,9 @@ defmodule CatatanBackend.Notes.Get do
       rows = Enum.to_list(result)
 
       case rows do
-        [] -> {:error, :not_found}
+        [] ->
+          {:error, :not_found}
+
         [note] ->
           note_map =
             %{
@@ -25,6 +29,7 @@ defmodule CatatanBackend.Notes.Get do
               "created_at" => Map.get(note, "created_at"),
               "updated_at" => Map.get(note, "updated_at")
             }
+
           {:ok, note_map}
       end
     else

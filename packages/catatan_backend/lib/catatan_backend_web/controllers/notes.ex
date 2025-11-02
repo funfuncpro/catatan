@@ -4,11 +4,11 @@ defmodule CatatanBackendWeb.NotesController do
   alias CatatanBackendWeb.Response
   alias CatatanBackend.Notes
 
+  action_fallback CatatanBackendWeb.FallbackController
+
   @moduledoc """
   Controller for handling note-related API requests.
   """
-
-  action_fallback CatatanBackendWeb.FallbackController
 
   def create(conn, params) do
     case NotesValidator.validate_notes_creation(params) do
@@ -42,7 +42,7 @@ defmodule CatatanBackendWeb.NotesController do
         conn
         |> put_status(:bad_request)
         |> Response.error_response("Bad Request", errors)
-      end
+    end
   end
 
   @doc """
