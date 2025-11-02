@@ -1,5 +1,5 @@
 defmodule CatatanBackend.Notes.Get do
-  def get_by_id(note_id) do
+  def by_id(note_id) do
     query = "SELECT note_id, content, created_at, updated_at FROM notes_by_id WHERE note_id = :note_id"
     params = %{"note_id" => note_id}
 
