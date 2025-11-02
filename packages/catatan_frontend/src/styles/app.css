@@ -1,5 +1,75 @@
 @import "tailwindcss";
 
+:root {
+  --color-bg: #ffffff;
+  --color-text: #000000;
+  --color-bg-secondary: #f8f9fa;
+  --color-bg-tertiary: #e9ecef;
+  --color-border: #dee2e6;
+  --color-primary: #0066cc;
+  --color-primary-hover: #0052a3;
+  --color-primary-light: #e6f3ff;
+  --color-muted: #6c757d;
+  --color-muted-bg: #f8f9fa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #1a1a1a;
+    --color-text: #ffffff;
+    --color-bg-secondary: #2d2d2d;
+    --color-bg-tertiary: #404040;
+    --color-border: #495057;
+    --color-primary: #4dabf7;
+    --color-primary-hover: #339af0;
+    --color-primary-light: #1c3a52;
+    --color-muted: #adb5bd;
+    --color-muted-bg: #2d2d2d;
+  }
+}
+
 @theme {
   --font-sans: "IBM Plex Sans", sans-serif;
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+  }
+}
+
+@layer utilities {
+  .bg-primary {
+    background-color: var(--color-primary);
+  }
+
+  .bg-primary-hover {
+    background-color: var(--color-primary-hover);
+  }
+
+  .bg-secondary {
+    background-color: var(--color-bg-secondary);
+  }
+
+  .bg-tertiary {
+    background-color: var(--color-bg-tertiary);
+  }
+
+  .text-primary {
+    color: var(--color-primary);
+  }
+
+  .text-muted {
+    color: var(--color-muted);
+  }
+
+  .border-custom {
+    border-color: var(--color-border);
+  }
 }
