@@ -20,7 +20,11 @@ defmodule CatatanBackend.Notes.Create do
          {:ok, _result} <-
            CassandraClient.execute(prepared, %{
              "id" => note_id,
-             "content" => content,
+             "content" =>
+               case content do
+                 nil -> ""
+                 _ -> content
+               end,
              "created_at" => timestamp,
              "updated_at" => timestamp
            }) do

@@ -9,7 +9,7 @@ defmodule CatatanBackendWeb.Router do
     pipe_through :api
 
     scope "/v1" do
-      resources "/notes", NotesController, only: [:index, :show, :create]
+      resources "/notes", NotesController, only: [:index, :show, :create, :update]
     end
   end
 

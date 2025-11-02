@@ -1,5 +1,35 @@
 import Config
 
+# For development, load environment variables from .env file
+env_filepath = Path.join(File.cwd!(), ".env")
+
+case File.exists?(env_filepath) do
+  true ->
+    case File.read(env_filepath) do
+      {:ok, content} ->
+        content
+        |> String.split("\n", trim: true)
+        |> Enum.reject(&(String.starts_with?(&1, "#") or &1 == ""))
+        |> Enum.each(fn line ->
+          case String.split(line, "=", parts: 2) do
+            [key, value] ->
+              System.put_env(String.trim(key), String.trim(value))
+
+            _ ->
+              IO.warn("Invalid line in .env: #{line}")
+          end
+        end)
+
+      {:error, reason} ->
+        IO.warn("Failed to read .env file: #{inspect(reason)}")
+    end
+
+  false ->
+    IO.warn(".env file not found at #{env_filepath}")
+end
+
+# For development, read and load environment variables from .env file
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -41,3 +71,5 @@ config :phoenix, :plug_init_mode, :runtime
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+config :catatan_backend, :env, :dev

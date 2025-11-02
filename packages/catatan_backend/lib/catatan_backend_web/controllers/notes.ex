@@ -9,16 +9,29 @@ defmodule CatatanBackendWeb.NotesController do
   def create(conn, params) do
     case NotesValidator.validate_notes_creation(params) do
       {:ok, validated_data} ->
-        case Notes.create_note(validated_data.content) do
-          {:ok, note} ->
-            conn
-            |> put_status(:created)
-            |> Response.success_response("Note created successfully", note)
+        with {:ok, note} <- Notes.create_note(Map.get(validated_data, :content, "")) do
+          conn
+          |> put_status(:created)
+          |> Response.success_response("Note created successfully", note)
+        end
 
-          {:error, reason} ->
-            conn
-            |> put_status(:internal_server_error)
-            |> Response.error_response("Failed to create note", %{reason: reason})
+      {:error, errors} ->
+        conn
+        |> put_status(:bad_request)
+        |> Response.error_response("Bad Request", errors)
+    end
+  end
+
+  def update(conn, params) do
+    IO.inspect(params)
+
+    case NotesValidator.validate_notes_update(params) do
+      {:ok, validated_data} ->
+        with {:ok, note} <-
+               Notes.update_note_by_id(validated_data.id, Map.get(validated_data, :content, "")) do
+          conn
+          |> put_status(:ok)
+          |> Response.success_response("Note updated successfully", note)
         end
 
       {:error, errors} ->

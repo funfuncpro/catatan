@@ -4,7 +4,7 @@ defmodule CatatanBackendWeb.NotesValidator do
 
   @doc """
   Validates the parameters for creating a note.
-  Expects a map with :content keys, both as strings.
+  Expects a map with optional :content key.
   """
   @spec validate_notes_creation(map) :: {:ok, map} | {:error, keyword()}
   def validate_notes_creation(params) do
@@ -14,7 +14,26 @@ defmodule CatatanBackendWeb.NotesValidator do
 
     {%{}, types}
     |> cast(params, Map.keys(types))
-    |> validate_required([:content])
+    |> validate_required([])
+    |> case do
+      %Ecto.Changeset{valid?: true, changes: changes} ->
+        {:ok, changes}
+
+      %Ecto.Changeset{valid?: false, errors: errors} ->
+        {:error, Error.format_ecto_error(errors)}
+    end
+  end
+
+  @spec validate_notes_update(map) :: {:ok, map} | {:error, keyword()}
+  def validate_notes_update(params) do
+    types = %{
+      id: :string,
+      content: :string
+    }
+
+    {%{}, types}
+    |> cast(params, Map.keys(types))
+    |> validate_required([:id])
     |> case do
       %Ecto.Changeset{valid?: true, changes: changes} ->
         {:ok, changes}
