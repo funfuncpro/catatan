@@ -13,7 +13,7 @@ defmodule CatatanBackend.Application do
       {Phoenix.PubSub, name: CatatanBackend.PubSub},
       {Xandra,
        Keyword.put(
-         Application.get_env(:catatan_backend, CatatanBackend.CassandraClient),
+         Application.get_env(:catatan_backend, :xandra, []),
          :name,
          :xandra_connection
        )},

@@ -1,40 +1,33 @@
 defmodule CatatanBackendWeb.NotesController do
   use CatatanBackendWeb, :controller
+  alias CatatanBackendWeb.Response
 
-  def test_user(conn, _params) do
-    case CatatanBackend.Notes.Create.test_user() do
+  def index(conn, _params) do
+    case CatatanBackend.Notes.All.all() do
       {:ok, notes} ->
-        json(conn, %{status: "success", data: notes, message: "User created successfully"})
-
-      {:error, reason} ->
-        json(conn, %{status: "error", message: reason})
-    end
-  end
-
-  def get_test_user(conn, _params) do
-    case CatatanBackend.Notes.Create.get_test_user() do
-      {:ok, users} ->
-        json(conn, %{status: "success", data: users, message: "Users retrieved successfully"})
-
-      {:error, reason} ->
-        json(conn, %{status: "error", message: reason})
-    end
-  end
-
-  def get_by_id(conn, %{"note_id" => note_id}) do
-    case CatatanBackend.Notes.Get.get_by_id(note_id) do
-      {:ok, note} ->
-        json(conn, %{status: "success", data: note})
-
-      {:error, :not_found} ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{status: "error", message: "Note not found"})
+        Response.success_response(conn, "success", %{notes: notes})
 
       {:error, _reason} ->
         conn
         |> put_status(:internal_server_error)
-        |> json(%{status: "error", message: "Internal server error"})
+        |> Response.error_response("internal server error", %{})
+    end
+  end
+
+  def show(conn, %{"id" => note_id}) do
+    case CatatanBackend.Notes.Get.by_id(note_id) do
+      {:ok, note} ->
+        Response.success_response(conn, "success", note)
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> Response.error_response("not found", %{})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> Response.error_response("internal server error", %{})
     end
   end
 end
