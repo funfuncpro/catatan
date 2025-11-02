@@ -1,28 +1,26 @@
 defmodule CatatanBackend.Notes.Get do
-  alias CatatanBackend.CassandraClient
+  def by_id(note_id) do
+    query = "SELECT note_id, content, created_at, updated_at FROM notes_by_id WHERE note_id = :note_id"
+    params = %{"note_id" => note_id}
 
-  @moduledoc """
-  Internal Module responsible for retrieving notes in the CatatanBackend application.
-  """
+    with {:ok, prepared} <- CatatanBackend.CassandraClient.prepare(query),
+         {:ok, result} <- CatatanBackend.CassandraClient.execute(prepared, params) do
+      rows = Enum.to_list(result)
 
-  @doc """
-  Retrieves a note by its ID.
-  """
-  @spec get_note_by_id(String.t()) :: {:ok, map()} | {:error, :not_found}
-  def get_note_by_id(note_id) do
-    with {:ok, prepared} <-
-           CassandraClient.prepare(
-             "SELECT note_id, content, created_at, updated_at FROM notes_by_id WHERE note_id = :id"
-           ),
-         {:ok, result} <-
-           CassandraClient.execute(prepared, %{"id" => note_id}) do
-      case Enum.to_list(result) do
-        [] ->
-          {:error, :not_found}
-
-        [note | _] ->
-          {:ok, note}
+      case rows do
+        [] -> {:error, :not_found}
+        [note] ->
+          note_map =
+            %{
+              "note_id" => Map.get(note, "note_id"),
+              "content" => Map.get(note, "content"),
+              "created_at" => Map.get(note, "created_at"),
+              "updated_at" => Map.get(note, "updated_at")
+            }
+          {:ok, note_map}
       end
+    else
+      {:error, reason} -> {:error, reason}
     end
   end
 end

@@ -33,6 +33,6 @@ defmodule CatatanBackend.Notes do
   """
   @spec get_note_by_id(String.t()) :: {:ok, map()} | {:error, :not_found}
   def get_note_by_id(note_id) do
-    Get.get_note_by_id(note_id)
+    Get.by_id(note_id)
   end
 end
