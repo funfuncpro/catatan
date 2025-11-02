@@ -48,6 +48,7 @@ export function Editor() {
       });
     });
 
+    editorRoot.focus();
     onCleanup(() => {
       unregister();
       editor.setRootElement(null);
@@ -58,7 +59,7 @@ export function Editor() {
     <div
       ref={editorRoot}
       contenteditable
-      class="w-full  p-4 text-base min-h-dvh"
+      class="w-full py-4 lg:px-10 px-5 text-base min-h-dvh focus:outline-none focus:ring-0"
     ></div>
   );
 }
