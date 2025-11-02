@@ -18,3 +18,12 @@ config :logger, level: :warning
 
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
+
+config :catatan_backend, CatatanBackend.CassandraClient,
+  nodes: ["localhost:9042"],
+  authentication: {
+    Xandra.Authenticator.Password,
+    username: "test", password: "test"
+  },
+  keyspace: "test_keyspace",
+  encryption: false

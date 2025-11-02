@@ -1,23 +1,43 @@
 defmodule CatatanBackendWeb.NotesController do
   use CatatanBackendWeb, :controller
+  alias CatatanBackendWeb.NotesValidator
+  alias CatatanBackendWeb.Response
+  alias CatatanBackend.Notes
 
-  def test_user(conn, _params) do
-    case CatatanBackend.Notes.Create.test_user() do
-      {:ok, notes} ->
-        json(conn, %{status: "success", data: notes, message: "User created successfully"})
+  action_fallback CatatanBackendWeb.FallbackController
 
-      {:error, reason} ->
-        json(conn, %{status: "error", message: reason})
+  def create(conn, params) do
+    case NotesValidator.validate_notes_creation(params) do
+      {:ok, validated_data} ->
+        with {:ok, note} <- Notes.create_note(Map.get(validated_data, :content, "")) do
+          conn
+          |> put_status(:created)
+          |> Response.success_response("Note created successfully", note)
+        end
+
+      {:error, errors} ->
+        conn
+        |> put_status(:bad_request)
+        |> Response.error_response("Bad Request", errors)
     end
   end
 
-  def get_test_user(conn, _params) do
-    case CatatanBackend.Notes.Create.get_test_user() do
-      {:ok, users} ->
-        json(conn, %{status: "success", data: users, message: "Users retrieved successfully"})
+  def update(conn, params) do
+    IO.inspect(params)
 
-      {:error, reason} ->
-        json(conn, %{status: "error", message: reason})
+    case NotesValidator.validate_notes_update(params) do
+      {:ok, validated_data} ->
+        with {:ok, note} <-
+               Notes.update_note_by_id(validated_data.id, Map.get(validated_data, :content, "")) do
+          conn
+          |> put_status(:ok)
+          |> Response.success_response("Note updated successfully", note)
+        end
+
+      {:error, errors} ->
+        conn
+        |> put_status(:bad_request)
+        |> Response.error_response("Bad Request", errors)
     end
   end
 end
