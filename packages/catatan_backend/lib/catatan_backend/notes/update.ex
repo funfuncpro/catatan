@@ -12,7 +12,7 @@ defmodule CatatanBackend.Notes.Update do
 
   @spec update_note(String.t(), String.t()) :: {:ok, map()} | {:error, term()}
   def update_note(note_id, new_content) do
-    case Get.get_note_by_id(note_id) do
+    case Get.by_id(note_id) do
       {:ok, existing_note} ->
         with {:ok, prepared} <-
                CassandraClient.prepare(

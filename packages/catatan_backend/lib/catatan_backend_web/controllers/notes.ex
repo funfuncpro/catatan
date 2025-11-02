@@ -6,6 +6,10 @@ defmodule CatatanBackendWeb.NotesController do
 
   action_fallback CatatanBackendWeb.FallbackController
 
+  @moduledoc """
+  Controller for handling note-related API requests.
+  """
+
   def create(conn, params) do
     case NotesValidator.validate_notes_creation(params) do
       {:ok, validated_data} ->
@@ -38,6 +42,41 @@ defmodule CatatanBackendWeb.NotesController do
         conn
         |> put_status(:bad_request)
         |> Response.error_response("Bad Request", errors)
+    end
+  end
+
+  @doc """
+  Handles the API request to retrieve all notes.
+  """
+  def index(conn, _params) do
+    case Notes.list_notes() do
+      {:ok, notes} ->
+        Response.success_response(conn, "success", %{notes: notes})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> Response.error_response("internal server error", %{})
+    end
+  end
+
+  @doc """
+  Handles the API request to retrieve a single note by its ID.
+  """
+  def show(conn, %{"id" => note_id}) do
+    case Notes.get_note_by_id(note_id) do
+      {:ok, note} ->
+        Response.success_response(conn, "success", note)
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> Response.error_response("not found", %{})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> Response.error_response("internal server error", %{})
     end
   end
 end
