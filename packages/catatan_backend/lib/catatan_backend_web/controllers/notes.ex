@@ -3,20 +3,37 @@ defmodule CatatanBackendWeb.NotesController do
   alias CatatanBackendWeb.NotesValidator
   alias CatatanBackendWeb.Response
   alias CatatanBackend.Notes
-
-  @moduledoc """
-  Controller for handling note-related API requests.
-  """
+  alias CatatanBackend.Sessions
 
   action_fallback CatatanBackendWeb.FallbackController
 
   def create(conn, params) do
     case NotesValidator.validate_notes_creation(params) do
       {:ok, validated_data} ->
-        with {:ok, note} <- Notes.create_note(Map.get(validated_data, :content, "")) do
-          conn
-          |> put_status(:created)
-          |> Response.success_response("Note created successfully", note)
+        case Notes.create_note(Map.get(validated_data, :content, "")) do
+          {:ok, note} ->
+            case Sessions.create_session(note["note_id"]) do
+              {:ok, session} ->
+                conn
+                |> put_resp_cookie("session_id", session["session_id"],
+                  http_only: true,
+                  secure: Application.get_env(:catatan_backend, :env) == :prod,
+                  same_site: "Lax",
+                  max_age: 30 * 24 * 60 * 60
+                )
+                |> put_status(:created)
+                |> Response.success_response("Note created successfully", note)
+
+              {:error, _reason} ->
+                conn
+                |> put_status(:internal_server_error)
+                |> Response.error_response("Failed to create session", %{})
+            end
+
+          {:error, _reason} ->
+            conn
+            |> put_status(:internal_server_error)
+            |> Response.error_response("Failed to create note", %{})
         end
 
       {:error, errors} ->
@@ -42,7 +59,7 @@ defmodule CatatanBackendWeb.NotesController do
         conn
         |> put_status(:bad_request)
         |> Response.error_response("Bad Request", errors)
-      end
+    end
   end
 
   @doc """
