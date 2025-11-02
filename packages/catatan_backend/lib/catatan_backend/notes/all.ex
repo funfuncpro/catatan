@@ -2,7 +2,8 @@ defmodule CatatanBackend.Notes.All do
   def all() do
     query = "SELECT note_id, content, created_at, updated_at FROM notes_by_id"
 
-    with {:ok, result} <- CatatanBackend.CassandraClient.execute(query) do
+    with {:ok, prepared} <- CatatanBackend.CassandraClient.prepare(query),
+         {:ok, result} <- CatatanBackend.CassandraClient.execute(prepared, %{}) do
       notes = Enum.map(result, fn row ->
         %{
           "note_id" => Map.get(row, "note_id"),
