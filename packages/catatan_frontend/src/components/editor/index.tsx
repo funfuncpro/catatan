@@ -1,18 +1,21 @@
 import { createEditor, $getRoot, $createParagraphNode } from "lexical";
-import { createSignal, onMount, onCleanup } from "solid-js";
+import { onMount, onCleanup, useContext } from "solid-js";
 import { $convertToMarkdownString, TRANSFORMERS } from "@lexical/markdown";
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
 import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
 
 import { mergeRegister } from "@lexical/utils";
+import { EditorContext } from "~/context/editor";
 
-export function Editor() {
+interface EditorProps {}
+
+export function Editor(props: EditorProps) {
+  const context = useContext(EditorContext);
   let editorRoot!: HTMLDivElement;
-  const [_text, setText] = createSignal("");
-  const [_markdown, setMarkdown] = createSignal("");
 
   onMount(() => {
-    if (!editorRoot) return;
+    if (!editorRoot || !context) return;
+
     const editor = createEditor({
       namespace: "main-editor",
       nodes: [HeadingNode, QuoteNode],
@@ -42,9 +45,13 @@ export function Editor() {
     const unregister = editor.registerUpdateListener(({ editorState }) => {
       editorState.read(() => {
         const root = $getRoot();
-        setText(root.getTextContent());
+        const textContent = root.getTextContent();
         const markdownContent = $convertToMarkdownString(TRANSFORMERS);
-        setMarkdown(markdownContent);
+
+        context.setText(textContent);
+        context.setMarkdown(markdownContent);
+        context.setIsDirty(true);
+        context.setLastChanged(new Date());
       });
     });
 
