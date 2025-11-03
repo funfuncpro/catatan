@@ -51,5 +51,9 @@ if config_env() == :prod do
       {Xandra.Authenticator.Password,
        username: System.get_env("CATATAN_KEYSPACES_USERNAME"),
        password: System.get_env("CATATAN_KEYSPACES_PASSWORD")},
-    keyspace: System.get_env("CATATAN_KEYSPACES_NAME")
+    keyspace: System.get_env("CATATAN_KEYSPACES_NAME"),
+    encryption: true,
+    transport_options: [
+      cacertfile: Path.join([File.cwd!(), ".resource", "sf-class2-root.crt"])
+    ]
 end

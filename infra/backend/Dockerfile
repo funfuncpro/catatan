@@ -47,15 +47,14 @@ COPY packages/catatan_backend/config/config.exs packages/catatan_backend/config/
 RUN mix deps.compile
 
 COPY packages/catatan_backend/priv priv
-
 COPY packages/catatan_backend/lib lib
+COPY packages/catatan_backend/.resource  .resource
 
 # Compile the release
 RUN mix compile
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY packages/catatan_backend/config/runtime.exs config/
-
 COPY packages/catatan_backend/rel rel
 RUN mix release
 
@@ -83,6 +82,7 @@ ENV MIX_ENV="prod"
 
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/catatan_backend ./
+COPY --from=builder --chown=nobody:root /app/.resource /app/bin/.resource
 
 USER nobody
 

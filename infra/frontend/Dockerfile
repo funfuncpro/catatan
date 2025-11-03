@@ -20,7 +20,8 @@ COPY --from=install /temp/dev/packages/catatan_frontend/node_modules ./packages/
 COPY . .
 
 WORKDIR /usr/src/app/packages/catatan_frontend
-RUN bun run build
+RUN --mount=type=secret,id=VITE_API_URL \
+  VITE_API_URL="$(cat /run/secrets/VITE_API_URL)" bun --bun run build
 
 FROM base AS release
 WORKDIR /usr/src/app
