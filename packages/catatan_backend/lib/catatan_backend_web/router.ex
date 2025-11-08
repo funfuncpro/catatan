@@ -13,6 +13,11 @@ defmodule CatatanBackendWeb.Router do
     scope "/v1" do
       resources "/notes", NotesController, only: [:index, :show, :create, :update]
 
+      # Session management routes
+      get "/sessions", SessionsController, :index
+      put "/sessions/:id/activate", SessionsController, :activate
+
+      # Share routes
       post "/shares", SharesController, :create
       resources "/shares", SharesController, only: [:show]
     end

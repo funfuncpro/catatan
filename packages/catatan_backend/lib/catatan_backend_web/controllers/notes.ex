@@ -2,6 +2,7 @@ defmodule CatatanBackendWeb.NotesController do
   use CatatanBackendWeb, :controller
   alias CatatanBackendWeb.NotesValidator
   alias CatatanBackendWeb.Response
+  alias CatatanBackendWeb.CookieSessionHelper
   alias CatatanBackend.Notes
   alias CatatanBackend.Sessions
 
@@ -15,12 +16,7 @@ defmodule CatatanBackendWeb.NotesController do
             case Sessions.create_session(note["note_id"]) do
               {:ok, session} ->
                 conn
-                |> put_resp_cookie("session_id", session["session_id"],
-                  http_only: true,
-                  secure: Application.get_env(:catatan_backend, :env) == :prod,
-                  same_site: "Lax",
-                  max_age: 30 * 24 * 60 * 60
-                )
+                |> CookieSessionHelper.add_and_activate_session(session["session_id"])
                 |> put_status(:created)
                 |> Response.success_response("Note created successfully", note)
 
