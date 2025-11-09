@@ -1,6 +1,10 @@
 import { createEditor, $getRoot, $createParagraphNode } from "lexical";
 import { onMount, onCleanup, useContext } from "solid-js";
-import { $convertToMarkdownString, TRANSFORMERS } from "@lexical/markdown";
+import {
+  $convertToMarkdownString,
+  $convertFromMarkdownString,
+  TRANSFORMERS,
+} from "@lexical/markdown";
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
 import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
 
@@ -9,7 +13,7 @@ import { EditorContext } from "~/context/editor";
 
 interface EditorProps {}
 
-export function Editor(props: EditorProps) {
+export function Editor(_props: EditorProps) {
   const context = useContext(EditorContext);
   let editorRoot!: HTMLDivElement;
 
@@ -35,10 +39,20 @@ export function Editor(props: EditorProps) {
       registerHistory(editor, historyState, 300),
     );
 
+    // Initialize editor with content from context
     editor.update(() => {
       const root = $getRoot();
-      if (root.isEmpty()) {
-        root.append($createParagraphNode());
+      root.clear(); // Clear any existing content
+      
+      const initialMarkdown = context.markdown();
+      if (initialMarkdown) {
+        // Convert markdown to Lexical nodes
+        $convertFromMarkdownString(initialMarkdown, TRANSFORMERS);
+      } else {
+        // If no content, add an empty paragraph
+        if (root.isEmpty()) {
+          root.append($createParagraphNode());
+        }
       }
     });
 

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import { createEffect, onMount, useContext } from "solid-js";
+import { createEffect, onMount, useContext, Show } from "solid-js";
 import { Editor } from "~/components/editor";
 import { Header } from "~/components/layout/header";
 import StatusLine from "~/components/layout/statusline";
@@ -11,6 +11,13 @@ export const Route = createFileRoute("/")({
 
 function EditorComp() {
   const context = useContext(EditorContext);
+
+  createEffect(() => {
+    if (!context) return;
+    console.log("Loading state:", context.isLoading());
+    console.log("Error state:", context.error());
+    console.log("Note ID:", context.noteId());
+  });
 
   createEffect(() => {
     if (!context) return;
@@ -28,13 +35,19 @@ function EditorComp() {
       let result = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/notes/${noteId}`,
         {
-          method: "PATCH",
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             content: context?.markdown(),
           }),
         },
       );
-      if (result.ok) {
+      const data = await result.json();
+      // API returns "success" as boolean, not "status" as string
+      if (data.success) {
         context?.setLastSaved(new Date());
       }
     });
@@ -50,7 +63,31 @@ function EditorComp() {
     });
   });
 
-  return <Editor />;
+  return (
+    <>
+      <Show when={context?.isLoading()}>
+        <div class="flex items-center justify-center min-h-[50vh]">
+          <div class="text-muted">Loading note...</div>
+        </div>
+      </Show>
+
+      <Show when={context?.error()}>
+        <div class="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+          <div class="text-red-500">Error: {context?.error()}</div>
+          <button
+            onClick={() => window.location.reload()}
+            class="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover"
+          >
+            Retry
+          </button>
+        </div>
+      </Show>
+
+      <Show when={!context?.isLoading() && !context?.error()}>
+        <Editor />
+      </Show>
+    </>
+  );
 }
 
 function Login() {
