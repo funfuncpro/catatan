@@ -16,7 +16,7 @@ defmodule CatatanBackendWeb.NotesController do
       {:ok, validated_data} ->
         case Notes.create_note(Map.get(validated_data, :content, "")) do
           {:ok, note} ->
-            case Sessions.create_session(note["note_id"]) do
+            case CatatanBackend.Sessions.create_session(note["note_id"]) do
               {:ok, session} ->
                 conn
                 |> CookieSessionHelper.add_and_activate_session(session["session_id"])
