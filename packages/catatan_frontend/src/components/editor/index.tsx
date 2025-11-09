@@ -11,14 +11,17 @@ import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
 import { mergeRegister } from "@lexical/utils";
 import { EditorContext } from "~/context/editor";
 
-interface EditorProps {}
+interface EditorProps {
+  readOnly?: boolean;
+  initialContent?: string;
+}
 
-export function Editor(_props: EditorProps) {
+export function Editor(props: EditorProps) {
   const context = useContext(EditorContext);
   let editorRoot!: HTMLDivElement;
 
   onMount(() => {
-    if (!editorRoot || !context) return;
+    if (!editorRoot) return;
 
     const editor = createEditor({
       namespace: "main-editor",
@@ -26,7 +29,7 @@ export function Editor(_props: EditorProps) {
       theme: {
         paragraph: "editor-paragraph",
       },
-      editable: true,
+      editable: !props.readOnly,
       onError(error) {
         console.error(error);
       },
@@ -39,12 +42,16 @@ export function Editor(_props: EditorProps) {
       registerHistory(editor, historyState, 300),
     );
 
-    // Initialize editor with content from context
+    // Explicitly set editable state
+    editor.setEditable(!props.readOnly);
+
+    // Initialize editor with content
     editor.update(() => {
       const root = $getRoot();
       root.clear(); // Clear any existing content
       
-      const initialMarkdown = context.markdown();
+      // Use initialContent prop if provided, otherwise use context
+      const initialMarkdown = props.initialContent ?? context?.markdown();
       if (initialMarkdown) {
         // Convert markdown to Lexical nodes
         $convertFromMarkdownString(initialMarkdown, TRANSFORMERS);
@@ -56,22 +63,32 @@ export function Editor(_props: EditorProps) {
       }
     });
 
-    const unregister = editor.registerUpdateListener(({ editorState }) => {
-      editorState.read(() => {
-        const root = $getRoot();
-        const textContent = root.getTextContent();
-        const markdownContent = $convertToMarkdownString(TRANSFORMERS);
+    // Only register update listener if not in read-only mode
+    let unregister: (() => void) | null = null;
+    
+    if (!props.readOnly && context) {
+      unregister = editor.registerUpdateListener(({ editorState }) => {
+        editorState.read(() => {
+          const root = $getRoot();
+          const textContent = root.getTextContent();
+          const markdownContent = $convertToMarkdownString(TRANSFORMERS);
 
-        context.setText(textContent);
-        context.setMarkdown(markdownContent);
-        context.setIsDirty(true);
-        context.setLastChanged(new Date());
+          context.setText(textContent);
+          context.setMarkdown(markdownContent);
+          context.setIsDirty(true);
+          context.setLastChanged(new Date());
+        });
       });
-    });
+    }
 
-    editorRoot.focus();
+    if (!props.readOnly) {
+      editorRoot.focus();
+    }
+    
     onCleanup(() => {
-      unregister();
+      if (unregister) {
+        unregister();
+      }
       editor.setRootElement(null);
     });
   });
@@ -79,8 +96,8 @@ export function Editor(_props: EditorProps) {
   return (
     <div
       ref={editorRoot}
-      contenteditable
-      class="w-full py-4 lg:px-10 px-5 text-base min-h-dvh focus:outline-none focus:ring-0"
+      contenteditable={!props.readOnly}
+      class={`w-full py-4 lg:px-10 px-5 text-base min-h-dvh focus:outline-none focus:ring-0 ${props.readOnly ? 'cursor-default select-text' : ''}`}
     ></div>
   );
 }

@@ -93,13 +93,13 @@ function EditorComp() {
 function Login() {
   return (
     <div class="flex flex-col relative w-full text-base ">
-      <Header />
-      <div class="relative w-full my-16">
-        <EditorContextProvider>
+      <EditorContextProvider>
+        <Header />
+        <div class="relative w-full my-16">
           <EditorComp />
           <StatusLine />
-        </EditorContextProvider>
-      </div>
+        </div>
+      </EditorContextProvider>
     </div>
   );
 }
