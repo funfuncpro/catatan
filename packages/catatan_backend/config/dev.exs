@@ -53,7 +53,7 @@ config :catatan_backend, CatatanBackend.CassandraClient,
   keyspace: System.get_env("CATATAN_KEYSPACES_NAME"),
   encryption: true,
   transport_options: [
-    cacertfile: Path.join([File.cwd!(), ".resource", "keyspaces-bundle.pem"])
+    cacertfile: Path.join([File.cwd!(), ".resource", "sf-class2-root.crt"])
   ]
 
 # Enable dev routes for dashboard and mailbox

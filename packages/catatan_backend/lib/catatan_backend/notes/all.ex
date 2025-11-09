@@ -12,14 +12,16 @@ defmodule CatatanBackend.Notes.All do
 
     with {:ok, prepared} <- CatatanBackend.CassandraClient.prepare(query),
          {:ok, result} <- CatatanBackend.CassandraClient.execute(prepared, %{}) do
-      notes = Enum.map(result, fn row ->
-        %{
-          "note_id" => Map.get(row, "note_id"),
-          "content" => Map.get(row, "content"),
-          "created_at" => Map.get(row, "created_at"),
-          "updated_at" => Map.get(row, "updated_at")
-        }
-      end)
+      notes =
+        Enum.map(result, fn row ->
+          %{
+            "note_id" => Map.get(row, "note_id"),
+            "content" => Map.get(row, "content"),
+            "created_at" => Map.get(row, "created_at"),
+            "updated_at" => Map.get(row, "updated_at")
+          }
+        end)
+
       {:ok, notes}
     else
       {:error, reason} -> {:error, reason}

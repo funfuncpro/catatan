@@ -4,9 +4,12 @@ defmodule CatatanBackendWeb.NotesController do
   alias CatatanBackendWeb.Response
   alias CatatanBackendWeb.CookieSessionHelper
   alias CatatanBackend.Notes
-  alias CatatanBackend.Sessions
 
   action_fallback CatatanBackendWeb.FallbackController
+
+  @moduledoc """
+  Controller for handling note-related API requests.
+  """
 
   def create(conn, params) do
     case NotesValidator.validate_notes_creation(params) do
