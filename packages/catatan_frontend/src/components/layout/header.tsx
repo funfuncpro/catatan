@@ -3,6 +3,7 @@ import { createSignal, Show, useContext } from "solid-js";
 import { EditorContext } from "~/context/editor";
 import { useAuth } from "~/context/auth";
 import { login } from "~/lib/auth";
+import { EmailTagInput } from "~/components/ui/email-tag-input";
 
 export function Header() {
   const context = useContext(EditorContext);
@@ -10,6 +11,9 @@ export function Header() {
   const [isSharing, setIsSharing] = createSignal(false);
   const [shareLink, setShareLink] = createSignal<string | null>(null);
   const [shareError, setShareError] = createSignal<string | null>(null);
+  const [accessType, setAccessType] = createSignal<"public" | "restricted">("public");
+  const [allowedEmails, setAllowedEmails] = createSignal<string[]>([]);
+  const [showConfigModal, setShowConfigModal] = createSignal(false);
 
   const handleShare = async () => {
     if (!context?.noteId()) {
@@ -72,15 +76,26 @@ export function Header() {
         return;
       }
       
-      // Step 3: Now create the share link (backend will use active_session cookie)
+      // Step 3: Create the share link with access control settings
+      const token = localStorage.getItem("access_token");
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/shares`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers,
           credentials: "include",
+          body: JSON.stringify({
+            access_type: accessType(),
+            allowed_emails: accessType() === "restricted" ? allowedEmails() : [],
+          }),
         }
       );
 
@@ -90,6 +105,7 @@ export function Header() {
       if (result.success && result.data?.share_id) {
         const link = `${window.location.origin}/shares/${result.data.share_id}`;
         setShareLink(link);
+        setShowConfigModal(false);
       } else {
         setShareError(result.message || "Failed to create share link");
       }
@@ -109,9 +125,18 @@ export function Header() {
     }
   };
 
+  const openConfigModal = () => {
+    setShowConfigModal(true);
+    setAccessType("public");
+    setAllowedEmails([]);
+  };
+
   const closeModal = () => {
     setShareLink(null);
     setShareError(null);
+    setShowConfigModal(false);
+    setAccessType("public");
+    setAllowedEmails([]);
   };
 
   return (
@@ -153,18 +178,17 @@ export function Header() {
           {/* Share button - only show if there's a note context */}
           <Show when={context?.noteId()}>
             <button
-              onClick={handleShare}
-              disabled={isSharing()}
-              class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+              onClick={openConfigModal}
+              class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 text-sm font-medium transition-colors"
             >
-              {isSharing() ? "Creating link..." : "Share"}
+              Share
             </button>
           </Show>
         </div>
       </header>
 
-      {/* Share modal */}
-      <Show when={shareLink() || shareError()}>
+      {/* Share configuration modal */}
+      <Show when={showConfigModal()}>
         <div
           class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
           onClick={closeModal}
@@ -173,33 +197,147 @@ export function Header() {
             class="bg-background border border-custom rounded-lg p-6 max-w-md w-full mx-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <Show when={shareLink()}>
-              <h2 class="text-xl font-semibold mb-4">Share Link Created</h2>
-              <p class="text-muted text-sm mb-4">
-                Anyone with this link can view your note (read-only):
-              </p>
-              <div class="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  value={shareLink()!}
-                  readonly
-                  class="flex-1 px-3 py-2 bg-secondary border border-custom rounded text-sm"
-                />
+            <h2 class="text-xl font-semibold mb-4">Create Share Link</h2>
+
+            {/* Access Type Toggle */}
+            <div class="mb-4">
+              <label class="block text-sm font-medium mb-2">Access Type</label>
+              <div class="flex gap-2">
                 <button
-                  onClick={copyToClipboard}
-                  class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 text-sm font-medium"
+                  onClick={() => setAccessType("public")}
+                  class={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${
+                    accessType() === "public"
+                      ? "bg-primary text-background"
+                      : "bg-secondary border border-custom hover:bg-opacity-90"
+                  }`}
                 >
-                  Copy
+                  Public
                 </button>
+                <button
+                  onClick={() => setAccessType("restricted")}
+                  class={`flex-1 px-4 py-2 rounded text-sm font-medium transition-colors ${
+                    accessType() === "restricted"
+                      ? "bg-primary text-background"
+                      : "bg-secondary border border-custom hover:bg-opacity-90"
+                  }`}
+                >
+                  Restricted
+                </button>
+              </div>
+            </div>
+
+            {/* Email Input for Restricted Access */}
+            <Show when={accessType() === "restricted"}>
+              <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">
+                  Allowed Emails
+                </label>
+                <EmailTagInput
+                  emails={allowedEmails()}
+                  onEmailsChange={setAllowedEmails}
+                  placeholder="Enter email addresses..."
+                />
+                <p class="text-xs text-muted mt-1">
+                  Press Enter or comma to add emails. Only these users can access.
+                </p>
               </div>
             </Show>
 
-            <Show when={shareError()}>
-              <h2 class="text-xl font-semibold mb-4 text-red-500">
-                Error Creating Share
-              </h2>
-              <p class="text-muted text-sm mb-4">{shareError()}</p>
+            <p class="text-muted text-sm mb-4">
+              {accessType() === "public"
+                ? "Anyone with this link will be able to view your note (read-only)"
+                : "Only users with allowed emails will be able to view this note"}
+            </p>
+
+            <div class="flex gap-2">
+              <button
+                onClick={closeModal}
+                class="flex-1 px-4 py-2 bg-secondary border border-custom rounded hover:bg-opacity-90 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleShare}
+                disabled={isSharing() || (accessType() === "restricted" && allowedEmails().length === 0)}
+                class="flex-1 px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                {isSharing() ? "Creating..." : "Create Link"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Share success modal */}
+      <Show when={shareLink() && !showConfigModal()}>
+        <div
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={closeModal}
+        >
+          <div
+            class="bg-background border border-custom rounded-lg p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 class="text-xl font-semibold mb-4">Share Link Created</h2>
+
+            <p class="text-muted text-sm mb-4">
+              {accessType() === "public"
+                ? "Anyone with this link can view your note (read-only):"
+                : `Only these ${allowedEmails().length} email(s) can view this note:`}
+            </p>
+
+            <Show when={accessType() === "restricted" && allowedEmails().length > 0}>
+              <div class="mb-4 p-3 bg-secondary border border-custom rounded">
+                <p class="text-xs text-muted mb-2">Allowed emails:</p>
+                <div class="flex flex-wrap gap-2">
+                  {allowedEmails().map((email) => (
+                    <span class="px-2 py-1 bg-primary text-background rounded text-xs">
+                      {email}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </Show>
+
+            <div class="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={shareLink()!}
+                readonly
+                class="flex-1 px-3 py-2 bg-secondary border border-custom rounded text-sm"
+              />
+              <button
+                onClick={copyToClipboard}
+                class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 text-sm font-medium"
+              >
+                Copy
+              </button>
+            </div>
+
+            <button
+              onClick={closeModal}
+              class="w-full px-4 py-2 bg-secondary border border-custom rounded hover:bg-opacity-90 text-sm font-medium"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </Show>
+
+      {/* Error modal */}
+      <Show when={shareError()}>
+        <div
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={closeModal}
+        >
+          <div
+            class="bg-background border border-custom rounded-lg p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 class="text-xl font-semibold mb-4 text-red-500">
+              Error Creating Share
+            </h2>
+            <p class="text-muted text-sm mb-4">{shareError()}</p>
 
             <button
               onClick={closeModal}

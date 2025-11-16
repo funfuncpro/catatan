@@ -21,12 +21,35 @@ function SharedNote() {
     try {
       const shareId = params().shareId;
       console.log("Fetching shared note:", shareId);
+      
+      const token = localStorage.getItem("catatan_access_token");
+      console.log("Token from localStorage:", token ? `${token.substring(0, 20)}...` : "null");
+      
+      const headers: HeadersInit = {};
+      
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        console.log("Authorization header added:", headers["Authorization"].substring(0, 30));
+      } else {
+        console.log("No token found in localStorage");
+      }
+
+      console.log("Request headers:", headers);
+
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/shares/${shareId}`,
+        { headers }
       );
 
       const result = await response.json();
       console.log("Shared note result:", result);
+
+      if (response.status === 403 || response.status === 404) {
+        // Show generic "not found" for both unauthorized and not found
+        setError("Share not found");
+        setIsLoading(false);
+        return;
+      }
 
       if (result.success && result.data) {
         setNoteContent(result.data.content || "");
@@ -55,9 +78,10 @@ function SharedNote() {
 
         <Show when={error()}>
           <div class="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-            <div class="text-red-500">Error: {error()}</div>
-            <p class="text-muted text-sm">
-              This share link may be invalid or expired.
+            <div class="text-xl font-semibold text-red-500">404</div>
+            <div class="text-lg text-muted">Share not found</div>
+            <p class="text-muted text-sm text-center max-w-md">
+              The share link you're looking for doesn't exist or may have been removed.
             </p>
           </div>
         </Show>
