@@ -9,7 +9,8 @@ defmodule CatatanBackendWeb.CookieSessionHelper do
 
   @sessions_cookie_name "session_ids"
   @active_session_cookie_name "active_session"
-  @cookie_max_age 30 * 24 * 60 * 60  # 30 days
+  # 30 days
+  @cookie_max_age 30 * 24 * 60 * 60
 
   @doc """
   Retrieves the list of session IDs from cookies.
@@ -19,8 +20,12 @@ defmodule CatatanBackendWeb.CookieSessionHelper do
   @spec get_session_ids(Plug.Conn.t()) :: [String.t()]
   def get_session_ids(conn) do
     case Map.get(conn.cookies, @sessions_cookie_name) do
-      nil -> []
-      "" -> []
+      nil ->
+        []
+
+      "" ->
+        []
+
       sessions_json ->
         case Jason.decode(sessions_json) do
           {:ok, sessions} when is_list(sessions) -> sessions

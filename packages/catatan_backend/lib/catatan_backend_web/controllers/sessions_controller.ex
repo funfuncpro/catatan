@@ -16,6 +16,7 @@ defmodule CatatanBackendWeb.SessionsController do
   """
   def index(conn, _params) do
     session_ids = CookieSessionHelper.get_session_ids(conn)
+
     active_session_id =
       case CookieSessionHelper.get_active_session_id(conn) do
         {:ok, id} -> id
@@ -34,12 +35,15 @@ defmodule CatatanBackendWeb.SessionsController do
                   note: note,
                   is_active: session_id == active_session_id
                 }
+
                 [session_data | acc]
 
-              {:error, _} -> acc
+              {:error, _} ->
+                acc
             end
 
-          {:error, _} -> acc
+          {:error, _} ->
+            acc
         end
       end)
       |> Enum.reverse()
