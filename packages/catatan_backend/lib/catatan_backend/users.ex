@@ -19,7 +19,8 @@ defmodule CatatanBackend.Users do
     case Get.get_user_by_email(email) do
       {:ok, user} ->
         # User exists, update if needed
-        {:ok, user.user_id}
+        # Cassandra returns map with string keys
+        {:ok, user["user_id"]}
 
       {:error, :not_found} ->
         # Create new user

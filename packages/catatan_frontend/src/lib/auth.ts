@@ -112,9 +112,11 @@ export async function verifyToken() {
       return null;
     }
 
+    console.log("Verified token subject:", verified.subject);
+
     return {
       email: verified.subject.properties.email,
-      externalId: verified.subject.properties.external_id,
+      externalId: verified.subject.properties.external_id || "",
     };
   } catch (error) {
     console.error("Failed to verify token:", error);

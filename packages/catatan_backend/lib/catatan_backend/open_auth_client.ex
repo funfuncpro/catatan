@@ -157,7 +157,14 @@ defmodule CatatanBackend.OpenAuthClient do
     with type when type == "user" <- Map.get(claims, "type"),
          properties when is_map(properties) <- Map.get(claims, "properties"),
          email when is_binary(email) <- Map.get(properties, "email") do
-      external_id = Map.get(properties, "external_id", "")
+      external_id =
+        case Map.get(properties, "external_id") do
+          nil -> Map.get(claims, "sub", "")
+          "" -> Map.get(claims, "sub", "")
+          id -> id
+        end
+
+      Logger.debug("Extracted user info - email: #{email}, external_id: #{external_id}")
 
       {:ok,
        %{
@@ -165,7 +172,9 @@ defmodule CatatanBackend.OpenAuthClient do
          external_id: external_id
        }}
     else
-      _ -> {:error, :invalid_claims}
+      result ->
+        Logger.warning("Failed to extract user info. Result: #{inspect(result)}, Claims: #{inspect(claims)}")
+        {:error, :invalid_claims}
     end
   end
 end

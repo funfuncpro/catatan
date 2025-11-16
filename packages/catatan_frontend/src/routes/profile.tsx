@@ -128,7 +128,7 @@ function ProfilePage() {
                 </div>
                 <div class="text-sm">
                   <div>Email: {auth.user()?.email}</div>
-                  <div>External ID: {auth.user()?.externalId || "(empty)"}</div>
+                  <div>External ID: {profileData()?.user.external_id  || "(empty)"}</div>
                 </div>
               </div>
             </div>
