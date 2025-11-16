@@ -19,9 +19,11 @@ defmodule CatatanBackend.Server.Notes do
 
   @spec start_link(String.t()) :: GenServer.on_start()
   def start_link(note_id) do
+    replica_id = Application.get_env(:catatan_backend, CatatanBackend.Replica)[:replica_id]
+
     GenServer.start_link(
       __MODULE__,
-      {note_id, Application.get_env(:catatan_backend, CatatanBackend.Replica)},
+      {note_id, replica_id},
       name: via(note_id)
     )
   end
@@ -88,8 +90,24 @@ defmodule CatatanBackend.Server.Notes do
 
   @spec init_note({:ok, NoteCrdt.t()} | {:error, term()}, String.t(), String.t()) ::
           NoteCrdt.t()
-  defp init_note({:ok, note}, _note_id, _replica_id), do: note
-  defp init_note({:error, _}, note_id, replica_id), do: NoteCrdt.new(note_id, replica_id)
+  defp init_note({:ok, note}, note_id, _replica_id) do
+    body = NoteCrdt.get_body(note)
+    clock = NoteCrdt.current_clock(note)
+
+    Logger.info(
+      "Loaded note #{note_id} from database: clock=#{clock}, body_length=#{String.length(body)}"
+    )
+
+    note
+  end
+
+  defp init_note({:error, reason}, note_id, replica_id) do
+    Logger.warning(
+      "Failed to load note #{note_id} from database: #{inspect(reason)}. Creating new empty note."
+    )
+
+    NoteCrdt.new(note_id, replica_id)
+  end
 
   defp via(note_id), do: {:via, Registry, {CatatanBackend.Notes.Registry, note_id}}
 

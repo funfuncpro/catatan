@@ -11,7 +11,7 @@ defmodule CatatanBackendWeb.Router do
     pipe_through :api
 
     scope "/v1" do
-      resources "/notes", NotesController, only: [:index, :show, :create, :update]
+      resources "/notes", NotesController, only: [:show, :create]
 
       # Session management routes
       get "/sessions", SessionsController, :index

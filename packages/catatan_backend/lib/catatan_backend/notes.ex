@@ -2,60 +2,66 @@ defmodule CatatanBackend.Notes do
   @moduledoc """
   Public API for managing notes in the CatatanBackend application.
 
-  This module provides two paths for note operations:
-  1. Persistent storage (Cassandra) - for CRUD operations
-  2. Live/realtime (GenServer + CRDT) - for collaborative editing
+  This module uses a unified CRDT-based architecture where all notes are stored
+  in the notes_lww table with Last-Write-Wins conflict resolution.
   """
 
   alias CatatanBackend.GenerateID
-  alias CatatanBackend.Notes.{Create, Update, Get, All}
+  alias CatatanBackend.Notes.{Store, NoteCrdt}
   alias CatatanBackend.Server.Notes, as: NoteServer
 
-  # --- Persistent Storage Operations ---
+  # --- Storage Operations ---
 
   @doc """
-  Creates a new note with the given content.
+  Creates a new note with the given initial content.
 
-  Generates a unique nano ID and timestamp, then persists the note to storage.
+  Generates a unique nano ID and creates the first replica with clock=1.
 
   ## Examples
 
       iex> create_note("My note content")
-      {:ok, %{note_id: "abc123", content: "My note content", ...}}
+      {:ok, %{note_id: "abc123", content: "My note content", clock: 1}}
   """
   @spec create_note(String.t()) :: {:ok, map()} | {:error, term()}
   def create_note(content) do
-    Create.insert_created_note(
-      content,
-      generate_note_id(),
-      current_timestamp()
-    )
+    note_id = generate_note_id()
+    replica_id = get_replica_id()
+    initial_clock = 1
+
+    case Store.upsert(note_id, replica_id, initial_clock, content) do
+      {:ok, _note} ->
+        {:ok,
+         %{
+           "note_id" => note_id,
+           "content" => content,
+           "clock" => initial_clock,
+           "replica_id" => replica_id
+         }}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
-  Updates an existing note with new content via persistent storage.
+  Retrieves a note by its ID, merging all replicas.
 
-  For realtime collaborative updates, use `update_note_live/2` instead.
+  Returns the merged content from all replicas using LWW semantics.
   """
-  @spec update_note_by_id(String.t(), String.t()) :: {:ok, map()} | {:error, term()}
-  def update_note_by_id(note_id, new_content) do
-    Update.update_note(note_id, new_content)
-  end
-
-  @doc """
-  Retrieves a note by its ID from persistent storage.
-  """
-  @spec get_note_by_id(String.t()) :: {:ok, map()} | {:error, :not_found}
+  @spec get_note_by_id(String.t()) :: {:ok, map()} | {:error, :not_found | term()}
   def get_note_by_id(note_id) do
-    Get.by_id(note_id)
-  end
+    case Store.get(note_id) do
+      {:ok, note_crdt} ->
+        {:ok,
+         %{
+           "note_id" => note_crdt.note_id,
+           "content" => NoteCrdt.get_body(note_crdt),
+           "clock" => NoteCrdt.current_clock(note_crdt)
+         }}
 
-  @doc """
-  Retrieves all notes from persistent storage.
-  """
-  @spec list_notes() :: {:ok, list(map())} | {:error, term()}
-  def list_notes do
-    All.all()
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   # --- Live/Realtime Operations (CRDT-based) ---
@@ -121,8 +127,8 @@ defmodule CatatanBackend.Notes do
   @spec generate_note_id() :: String.t()
   defp generate_note_id, do: GenerateID.generate_nano_id()
 
-  @spec current_timestamp() :: integer()
-  defp current_timestamp do
-    DateTime.utc_now() |> DateTime.to_unix(:millisecond)
+  @spec get_replica_id() :: String.t()
+  defp get_replica_id do
+    Application.get_env(:catatan_backend, CatatanBackend.Replica)[:replica_id]
   end
 end
