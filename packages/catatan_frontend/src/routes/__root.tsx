@@ -10,6 +10,7 @@ import { DefaultCatchBoundary } from "../components/default-catch-boundary";
 import { NotFound } from "../components/not-found";
 import * as Solid from "solid-js";
 import { HydrationScript } from "solid-js/web";
+import { AuthProvider } from "~/context/auth";
 
 import ibmPlexCss from "@ibm/plex-sans/css/ibm-plex-sans-all.css?url";
 import appCss from "~/styles/app.css?url";
@@ -72,10 +73,12 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <div class="w-full min-h-screen antialiased">
-        <Command />
-        <Outlet />
-      </div>
+      <AuthProvider>
+        <div class="w-full min-h-screen antialiased">
+          <Command />
+          <Outlet />
+        </div>
+      </AuthProvider>
     </RootDocument>
   );
 }
