@@ -1,9 +1,12 @@
 import { Link } from "@tanstack/solid-router";
 import { createSignal, Show, useContext } from "solid-js";
 import { EditorContext } from "~/context/editor";
+import { useAuth } from "~/context/auth";
+import { login } from "~/lib/auth";
 
 export function Header() {
   const context = useContext(EditorContext);
+  const auth = useAuth();
   const [isSharing, setIsSharing] = createSignal(false);
   const [shareLink, setShareLink] = createSignal<string | null>(null);
   const [shareError, setShareError] = createSignal<string | null>(null);
@@ -120,16 +123,44 @@ export function Header() {
           </span>
         </Link>
 
-        {/* Share button - only show if there's a note context */}
-        <Show when={context?.noteId()}>
-          <button
-            onClick={handleShare}
-            disabled={isSharing()}
-            class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+        <div class="flex items-center gap-3">
+          {/* Auth buttons */}
+          <Show
+            when={auth.isAuthenticated()}
+            fallback={
+              <button
+                onClick={() => login()}
+                class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 text-sm font-medium transition-colors"
+              >
+                Login
+              </button>
+            }
           >
-            {isSharing() ? "Creating link..." : "Share"}
-          </button>
-        </Show>
+            <Link
+              to="/profile"
+              class="px-3 py-1.5 text-sm text-muted hover:text-primary transition-colors"
+            >
+              {auth.user()?.email}
+            </Link>
+            <button
+              onClick={() => auth.logout()}
+              class="px-4 py-2 bg-secondary border border-custom rounded hover:bg-opacity-90 text-sm font-medium transition-colors"
+            >
+              Logout
+            </button>
+          </Show>
+
+          {/* Share button - only show if there's a note context */}
+          <Show when={context?.noteId()}>
+            <button
+              onClick={handleShare}
+              disabled={isSharing()}
+              class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+            >
+              {isSharing() ? "Creating link..." : "Share"}
+            </button>
+          </Show>
+        </div>
       </header>
 
       {/* Share modal */}

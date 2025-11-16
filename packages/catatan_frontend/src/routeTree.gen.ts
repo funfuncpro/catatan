@@ -9,9 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SharesShareIdRouteImport } from './routes/shares/$shareId'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -22,35 +29,55 @@ const SharesShareIdRoute = SharesShareIdRouteImport.update({
   path: '/shares/$shareId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/profile': typeof ProfileRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/shares/$shareId': typeof SharesShareIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/profile': typeof ProfileRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/shares/$shareId': typeof SharesShareIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/profile': typeof ProfileRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/shares/$shareId': typeof SharesShareIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/shares/$shareId'
+  fullPaths: '/' | '/profile' | '/auth/callback' | '/shares/$shareId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/shares/$shareId'
-  id: '__root__' | '/' | '/shares/$shareId'
+  to: '/' | '/profile' | '/auth/callback' | '/shares/$shareId'
+  id: '__root__' | '/' | '/profile' | '/auth/callback' | '/shares/$shareId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ProfileRoute: typeof ProfileRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   SharesShareIdRoute: typeof SharesShareIdRoute
 }
 
 declare module '@tanstack/solid-router' {
   interface FileRoutesByPath {
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -65,11 +92,20 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof SharesShareIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ProfileRoute: ProfileRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   SharesShareIdRoute: SharesShareIdRoute,
 }
 export const routeTree = rootRouteImport
