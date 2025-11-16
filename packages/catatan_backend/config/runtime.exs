@@ -32,6 +32,11 @@ if config_env() == :prod do
       environment variable KEYSPACES_NAME is missing.
     """
 
+  System.get_env("CATATAN_REPLICA_ID") ||
+    raise """
+      environment variable CATATAN_REPLICA_ID is missing.
+    """
+
   host = System.get_env("PHX_HOST") || "example.com"
   port = String.to_integer(System.get_env("PORT") || "8000")
 
@@ -56,4 +61,7 @@ if config_env() == :prod do
     transport_options: [
       cacertfile: Path.join([File.cwd!(), ".resource", "sf-class2-root.crt"])
     ]
+
+  config :catatan_backend, CatatanBackend.Replica,
+    replica_id: System.get_env("CATATAN_REPLICA_ID") || "prod_replica"
 end

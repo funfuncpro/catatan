@@ -27,3 +27,5 @@ config :catatan_backend, CatatanBackend.CassandraClient,
   },
   keyspace: "test_keyspace",
   encryption: false
+
+config :catatan_backend, CatatanBackend.Replica, replica_id: "test_replica"

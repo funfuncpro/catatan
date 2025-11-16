@@ -8,6 +8,8 @@ defmodule CatatanBackend.Application do
       CatatanBackendWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:catatan_backend, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: CatatanBackend.PubSub},
+      {Registry, keys: :unique, name: CatatanBackend.Notes.Registry},
+      {DynamicSupervisor, strategy: :one_for_one, name: CatatanBackend.Notes.Supervisor},
       {Xandra,
        Keyword.put(
          Application.get_env(:catatan_backend, CatatanBackend.CassandraClient),

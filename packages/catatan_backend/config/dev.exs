@@ -56,6 +56,9 @@ config :catatan_backend, CatatanBackend.CassandraClient,
     cacertfile: Path.join([File.cwd!(), ".resource", "sf-class2-root.crt"])
   ]
 
+config :catatan_backend, CatatanBackend.Replica,
+  replica_id: System.get_env("CATATAN_REPLICA_ID") || "dev_replica"
+
 # Enable dev routes for dashboard and mailbox
 config :catatan_backend, dev_routes: true
 
