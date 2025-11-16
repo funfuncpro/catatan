@@ -71,6 +71,11 @@ defmodule CatatanBackendWeb.SharesController do
   Restricted shares require authentication and email whitelist membership.
   """
   def show(conn, %{"id" => share_id}) do
+    IO.puts("\n=== SHARES CONTROLLER SHOW ===")
+    IO.puts("Share ID: #{inspect(share_id)}")
+    IO.puts("Current user from conn.assigns: #{inspect(Map.get(conn.assigns, :current_user))}")
+    IO.puts("==============================\n")
+
     case SharesValidator.validate_share_retrieval(%{share_id: share_id}) do
       {:ok, _validated_data} ->
         # Get current user from conn.assigns (nil if not authenticated)

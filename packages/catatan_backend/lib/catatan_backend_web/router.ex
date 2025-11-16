@@ -5,6 +5,7 @@ defmodule CatatanBackendWeb.Router do
     plug :accepts, ["json"]
     plug :fetch_cookies
     plug CatatanBackendWeb.Plugs.SessionPlug
+    plug CatatanBackendWeb.Plugs.AuthPlug, required: false
   end
 
   pipeline :authenticated do

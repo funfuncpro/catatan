@@ -32,11 +32,21 @@ defmodule CatatanBackendWeb.Plugs.AuthPlug do
   def call(conn, opts) do
     required = Keyword.get(opts, :required, true)
 
+    IO.puts("\n=== AUTH PLUG DEBUG ===")
+    IO.puts("Required: #{required}")
+    IO.puts("Authorization header: #{inspect(get_req_header(conn, "authorization"))}")
+
     case extract_token(conn) do
       {:ok, token} ->
-        verify_and_assign_user(conn, token, required)
+        IO.puts("Token extracted: #{String.slice(token, 0, 20)}...")
+        result = verify_and_assign_user(conn, token, required)
+        IO.puts("User assigned: #{inspect(Map.get(result.assigns, :current_user))}")
+        IO.puts("======================\n")
+        result
 
       :error ->
+        IO.puts("No token found")
+        IO.puts("======================\n")
         if required do
           conn
           |> put_resp_content_type("application/json")
