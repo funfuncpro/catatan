@@ -7,6 +7,10 @@ defmodule CatatanBackendWeb.Router do
     plug CatatanBackendWeb.Plugs.SessionPlug
   end
 
+  pipeline :authenticated do
+    plug CatatanBackendWeb.Plugs.AuthPlug, required: true
+  end
+
   scope "/api", CatatanBackendWeb do
     pipe_through :api
 
@@ -20,6 +24,14 @@ defmodule CatatanBackendWeb.Router do
       # Share routes
       post "/shares", SharesController, :create
       resources "/shares", SharesController, only: [:show]
+    end
+
+    # Protected routes requiring authentication
+    scope "/v1" do
+      pipe_through :authenticated
+
+      # Profile route
+      get "/profile", ProfileController, :show
     end
   end
 
