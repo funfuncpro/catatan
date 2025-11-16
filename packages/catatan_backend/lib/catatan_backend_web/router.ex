@@ -21,9 +21,9 @@ defmodule CatatanBackendWeb.Router do
       get "/sessions", SessionsController, :index
       put "/sessions/:id/activate", SessionsController, :activate
 
-      # Share routes
+      # Share routes - public access
       post "/shares", SharesController, :create
-      resources "/shares", SharesController, only: [:show]
+      get "/shares/:id", SharesController, :show
     end
 
     # Protected routes requiring authentication
@@ -32,6 +32,10 @@ defmodule CatatanBackendWeb.Router do
 
       # Profile route
       get "/profile", ProfileController, :show
+
+      # Share management routes - requires authentication
+      get "/shares/:id/info", SharesController, :info
+      put "/shares/:id/permissions", SharesController, :update_permissions
     end
   end
 
