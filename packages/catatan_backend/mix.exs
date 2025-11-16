@@ -47,7 +47,11 @@ defmodule CatatanBackend.MixProject do
       {:gettext, "~> 0.26"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:xandra, "~> 0.19"},
+      {:nanoid, "~> 2.1.0"},
+      {:decimal, "~> 2.0"},
+      {:ecto, "~> 3.10"}
     ]
   end
 

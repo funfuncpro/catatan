@@ -1,16 +1,21 @@
 defmodule CatatanBackend.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
   @moduledoc false
 
   use Application
-
   @impl true
   def start(_type, _args) do
     children = [
       CatatanBackendWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:catatan_backend, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: CatatanBackend.PubSub},
+      {Registry, keys: :unique, name: CatatanBackend.Notes.Registry},
+      {DynamicSupervisor, strategy: :one_for_one, name: CatatanBackend.Notes.Supervisor},
+      {Xandra,
+       Keyword.put(
+         Application.get_env(:catatan_backend, CatatanBackend.CassandraClient),
+         :name,
+         :xandra_connection
+       )},
       # Start a worker by calling: CatatanBackend.Worker.start_link(arg)
       # {CatatanBackend.Worker, arg},
       # Start to serve requests, typically the last entry

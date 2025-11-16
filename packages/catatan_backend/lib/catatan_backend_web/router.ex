@@ -3,12 +3,24 @@ defmodule CatatanBackendWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug :fetch_cookies
+    plug CatatanBackendWeb.Plugs.SessionPlug
   end
 
   scope "/api", CatatanBackendWeb do
     pipe_through :api
 
-    get "/v1/", HelloController, :index
+    scope "/v1" do
+      resources "/notes", NotesController, only: [:show, :create]
+
+      # Session management routes
+      get "/sessions", SessionsController, :index
+      put "/sessions/:id/activate", SessionsController, :activate
+
+      # Share routes
+      post "/shares", SharesController, :create
+      resources "/shares", SharesController, only: [:show]
+    end
   end
 
   # Enable Swoosh mailbox preview in development
