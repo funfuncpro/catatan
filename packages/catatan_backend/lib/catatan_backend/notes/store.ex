@@ -54,7 +54,7 @@ defmodule CatatanBackend.Notes.Store do
   def get(note_id) do
     with {:ok, prepared} <-
            CassandraClient.prepare(
-             "SELECT note_id, replica_id, clock, body FROM notes_lww WHERE note_id = :note_id ALLOW FILTERING"
+             "SELECT note_id, replica_id, clock, body FROM notes_lww WHERE note_id = :note_id"
            ),
          {:ok, %Xandra.Page{} = page} <-
            CassandraClient.execute(prepared, %{"note_id" => note_id}) do

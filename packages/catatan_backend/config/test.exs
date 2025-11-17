@@ -29,3 +29,7 @@ config :catatan_backend, CatatanBackend.CassandraClient,
   encryption: false
 
 config :catatan_backend, CatatanBackend.Replica, replica_id: "test_replica"
+
+config :argon2_elixir,
+  t_cost: 1,
+  m_cost: 8

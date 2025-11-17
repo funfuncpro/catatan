@@ -27,8 +27,6 @@ FROM base AS release
 WORKDIR /usr/src/app
 
 COPY --from=install /temp/prod/node_modules ./node_modules
-COPY --from=install /temp/prod/packages/catatan_frontend/node_modules ./packages/catatan_frontend/node_modules
-
 COPY --from=prerelease /usr/src/app/packages/catatan_frontend ./packages/catatan_frontend
 
 WORKDIR /usr/src/app/packages/catatan_frontend
