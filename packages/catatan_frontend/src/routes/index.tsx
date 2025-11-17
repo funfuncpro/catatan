@@ -1,29 +1,21 @@
 import { createFileRoute } from "@tanstack/solid-router";
-import { createEffect, onMount, useContext, Show } from "solid-js";
+import { onMount, useContext, Show } from "solid-js";
 import { Editor } from "~/components/editor";
 import { Header } from "~/components/layout/header";
 import StatusLine from "~/components/layout/statusline";
-import { EditorContextProvider, EditorContext } from "~/context/editor";
+import { EditorContextProvider, EditorContext } from "~/context/editor-client";
+import { getEditorSessionFn } from "~/context/editor";
 
 export const Route = createFileRoute("/")({
   component: Login,
+  loader: async () => {
+    const noteData = await getEditorSessionFn();
+    return { noteData };
+  },
 });
 
 function EditorComp() {
   const context = useContext(EditorContext);
-
-  createEffect(() => {
-    if (!context) return;
-    console.log("Loading state:", context.isLoading());
-    console.log("Error state:", context.error());
-    console.log("Note ID:", context.noteId());
-  });
-
-  createEffect(() => {
-    if (!context) return;
-    console.log(context.lastSaved());
-  });
-
   onMount(() => {
     context?.setHandleSave(() => async () => {
       const noteId = context?.noteId();
@@ -46,7 +38,6 @@ function EditorComp() {
         },
       );
       const data = await result.json();
-      // API returns "success" as boolean, not "status" as string
       if (data.success) {
         context?.setLastSaved(new Date());
       }
@@ -91,9 +82,11 @@ function EditorComp() {
 }
 
 function Login() {
+  const loaderData = Route.useLoaderData();
+
   return (
     <div class="flex flex-col relative w-full text-base ">
-      <EditorContextProvider>
+      <EditorContextProvider note={loaderData().noteData}>
         <Header />
         <div class="relative w-full my-16">
           <EditorComp />

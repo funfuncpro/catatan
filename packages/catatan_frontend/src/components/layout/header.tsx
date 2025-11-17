@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/solid-router";
 import { createSignal, Show, useContext } from "solid-js";
-import { EditorContext } from "~/context/editor";
+import { EditorContext } from "~/context/editor-client";
 
 export function Header() {
   const context = useContext(EditorContext);
@@ -20,55 +20,55 @@ export function Header() {
 
     try {
       const currentNoteId = context.noteId();
-      
+
       // Step 1: Get all sessions to find the session_id for our current note
       const sessionsResponse = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/sessions`,
         {
           credentials: "include",
-        }
+        },
       );
-      
+
       const sessionsResult = await sessionsResponse.json();
       console.log("Sessions result:", sessionsResult);
-      
+
       if (!sessionsResult.success || !sessionsResult.data?.sessions) {
         setShareError("Failed to retrieve sessions");
         setIsSharing(false);
         return;
       }
-      
+
       // Find the session that corresponds to our current note
       const currentSession = sessionsResult.data.sessions.find(
-        (session: any) => session.note?.note_id === currentNoteId
+        (session: any) => session.note?.note_id === currentNoteId,
       );
-      
+
       if (!currentSession) {
         setShareError("Could not find session for current note");
         setIsSharing(false);
         return;
       }
-      
+
       console.log("Found session for note:", currentSession.session_id);
-      
+
       // Step 2: Activate this session so the backend knows which note to share
       const activateResponse = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/sessions/${currentSession.session_id}/activate`,
         {
           method: "PUT",
           credentials: "include",
-        }
+        },
       );
-      
+
       const activateResult = await activateResponse.json();
       console.log("Activate session result:", activateResult);
-      
+
       if (!activateResult.success) {
         setShareError("Failed to activate session");
         setIsSharing(false);
         return;
       }
-      
+
       // Step 3: Now create the share link (backend will use active_session cookie)
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/shares`,
@@ -78,7 +78,7 @@ export function Header() {
             "Content-Type": "application/json",
           },
           credentials: "include",
-        }
+        },
       );
 
       const result = await response.json();
