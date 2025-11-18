@@ -7,6 +7,11 @@ defmodule CatatanBackendWeb.Router do
     plug CatatanBackendWeb.Plugs.SessionPlug
   end
 
+  pipeline :internal_api do
+    plug :accepts, ["json"]
+    plug CatatanBackendWeb.Plugs.ApiKey
+  end
+
   scope "/api", CatatanBackendWeb do
     pipe_through :api
 
@@ -20,6 +25,14 @@ defmodule CatatanBackendWeb.Router do
       # Share routes
       post "/shares", SharesController, :create
       resources "/shares", SharesController, only: [:show]
+    end
+  end
+
+  scope "/internal", CatatanBackendWeb do
+    pipe_through :internal_api
+
+    scope "/v1" do
+      resources "/email", EmailController, only: [:index]
     end
   end
 
