@@ -32,7 +32,7 @@ defmodule CatatanBackend.Shares.Get do
   @spec by_share_id(String.t()) :: {:ok, map()} | {:error, :not_found | term()}
   def by_share_id(share_id) do
     with {:ok, note_id} <- get_note_id_by_share(share_id),
-         {:ok, note} <- CatatanBackend.Notes.Get.by_id(note_id) do
+         {:ok, note} <- CatatanBackend.Notes.get_note_by_id(note_id) do
       {:ok, note}
     else
       {:error, reason} -> {:error, reason}

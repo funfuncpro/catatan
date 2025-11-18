@@ -9,27 +9,36 @@ defmodule CatatanBackend.ApiKey.Store do
           id: String.t(),
           hashed_api_key: String.t(),
           datetime: DateTime.t()
-        }) :: map()
+        }) ::
+          {:ok,
+           %{
+             id: String.t(),
+             created_at: integer(),
+             updated_at: integer(),
+             key: String.t()
+           }}
+          | {:error, term()}
   def create(%{id: id, hashed_api_key: hashed_api_key, datetime: datetime}) do
     with {:ok, preapered} <-
            CassandraClient.prepare(
-             "INSERT INTO api_key (id, created_at, updated_at, value) VALUES (:id, :created_at, :updated_at, :value)"
+             "INSERT INTO api_key (id, key, created_at, updated_at) VALUES (:id, :key, :created_at, :updated_at)"
            ),
          {:ok, result} <-
            CassandraClient.execute(preapered, %{
              "id" => id,
+             "key" => hashed_api_key,
              "created_at" => datetime |> DateTime.to_unix(:millisecond),
-             "updated_at" => datetime |> DateTime.to_unix(:millisecond),
-             "value" => hashed_api_key
+             "updated_at" => datetime |> DateTime.to_unix(:millisecond)
            }) do
       case result do
         %Xandra.Void{} ->
-          %{
-            id: id,
-            created_at: datetime,
-            updated_at: datetime,
-            value: hashed_api_key
-          }
+          {:ok,
+           %{
+             id: id,
+             created_at: datetime |> DateTime.to_unix(:millisecond),
+             updated_at: datetime |> DateTime.to_unix(:millisecond),
+             key: hashed_api_key
+           }}
 
         _ ->
           {:error, :unexpected_result}
@@ -52,7 +61,7 @@ defmodule CatatanBackend.ApiKey.Store do
              id: String.t(),
              created_at: integer(),
              updated_at: integer(),
-             value: String.t()
+             key: String.t()
            }}
           | {:error, term()}
   def get(%{
@@ -60,7 +69,7 @@ defmodule CatatanBackend.ApiKey.Store do
       }) do
     with {:ok, preapered} <-
            CassandraClient.prepare(
-             "SELECT id, created_at, updated_at, value FROM api_key WHERE id = :id"
+             "SELECT id, created_at, updated_at, key FROM api_key WHERE id = :id"
            ),
          {:ok, %Xandra.Page{} = page} <-
            CassandraClient.execute(preapered, %{
@@ -71,7 +80,13 @@ defmodule CatatanBackend.ApiKey.Store do
           {:error, :not_found}
 
         record ->
-          {:ok, record |> Map.new()}
+          {:ok,
+           %{
+             id: Map.get(record, "id"),
+             created_at: Map.get(record, "created_at"),
+             updated_at: Map.get(record, "updated_at"),
+             key: Map.get(record, "key")
+           }}
       end
     else
       {:error, reason} ->
