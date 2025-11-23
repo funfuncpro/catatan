@@ -37,6 +37,31 @@ if config_env() == :prod do
       environment variable CATATAN_REPLICA_ID is missing.
     """
 
+  System.get_env("AWS_SES_REGION") ||
+    raise """
+      environment variable AWS_SES_REGION is missing.
+    """
+
+  System.get_env("AWS_SES_ACCESS_KEY_ID") ||
+    raise """
+      environment variable AWS_SES_ACCESS_KEY_ID is missing.
+    """
+
+  System.get_env("AWS_SES_SECRET_ACCESS_KEY") ||
+    raise """
+      environment variable AWS_SES_SECRET_ACCESS_KEY is missing.
+    """
+
+  System.get_env("AWS_SQS_URL") ||
+    raise """
+      environment variable AWS_SQS_URL is missing.
+    """
+
+  System.get_env("FROM_EMAIL") ||
+    raise """
+      environment variable FROM_EMAIL is missing.
+    """
+
   host = System.get_env("PHX_HOST") || "example.com"
   port = String.to_integer(System.get_env("PORT") || "8000")
 
@@ -65,3 +90,19 @@ if config_env() == :prod do
   config :catatan_backend, CatatanBackend.Replica,
     replica_id: System.get_env("CATATAN_REPLICA_ID") || "prod_replica"
 end
+
+config :catatan_backend, CatatanBackend.Mailer,
+  adapter: Swoosh.Adapters.AmazonSES,
+  region: System.get_env("AWS_SES_REGION"),
+  access_key: System.get_env("AWS_SES_ACCESS_KEY_ID"),
+  secret: System.get_env("AWS_SES_SECRET_ACCESS_KEY")
+
+config :ex_aws,
+  access_key_id: System.get_env("AWS_ACCESS_KEY_ID"),
+  secret_access_key: System.get_env("AWS_SECRET_ACCESS_KEY"),
+  region: System.get_env("AWS_REGION")
+
+config :catatan_backend, CatatanBackend.SQS, url: System.get_env("AWS_SQS_URL")
+
+config :catatan_backend, CatatanBackend.MailerInformation,
+  from_email: System.get_env("FROM_EMAIL")

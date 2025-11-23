@@ -4,6 +4,8 @@ defmodule CatatanBackend.Application do
   use Application
   @impl true
   def start(_type, _args) do
+    queue_url = Application.get_env(:catatan_backend, CatatanBackend.SQS)[:url]
+
     children = [
       CatatanBackendWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:catatan_backend, :dns_cluster_query) || :ignore},
@@ -16,9 +18,10 @@ defmodule CatatanBackend.Application do
          :name,
          :xandra_connection
        )},
-      # Start a worker by calling: CatatanBackend.Worker.start_link(arg)
-      # {CatatanBackend.Worker, arg},
-      # Start to serve requests, typically the last entry
+      {CatatanBackend.Email.Producer, []},
+      {CatatanBackend.Email.ProducerConsumer, %{queue_url: queue_url}},
+      {CatatanBackend.Email.SQSPoller, %{queue_url: queue_url}},
+      {CatatanBackend.Email.Process, %{queue_url: queue_url}},
       CatatanBackendWeb.Endpoint
     ]
 

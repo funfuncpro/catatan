@@ -40,6 +40,7 @@ defmodule CatatanBackend.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.8.1"},
+      {:phoenix_live_view, "~> 1.1"},
       {:swoosh, "~> 1.16"},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
@@ -52,7 +53,12 @@ defmodule CatatanBackend.MixProject do
       {:nanoid, "~> 2.1.0"},
       {:decimal, "~> 2.0"},
       {:ecto, "~> 3.10"},
-      {:argon2_elixir, "~> 4.0"}
+      {:argon2_elixir, "~> 4.0"},
+      {:hackney, "~> 1.9"},
+      {:ex_aws, "~> 2.1"},
+      {:ex_aws_sqs, "~> 3.3"},
+      {:saxy, "~> 1.1"},
+      {:gen_stage, "~> 1.0"}
     ]
   end
 
