@@ -91,11 +91,7 @@ if config_env() == :prod do
     replica_id: System.get_env("CATATAN_REPLICA_ID") || "prod_replica"
 end
 
-config :catatan_backend, CatatanBackend.Mailer,
-  adapter: Swoosh.Adapters.AmazonSES,
-  region: System.get_env("AWS_SES_REGION"),
-  access_key: System.get_env("AWS_SES_ACCESS_KEY_ID"),
-  secret: System.get_env("AWS_SES_SECRET_ACCESS_KEY")
+config :catatan_backend, CatatanBackend.Mailer, adapter: Swoosh.Adapters.ExAwsAmazonSES
 
 config :ex_aws,
   access_key_id: System.get_env("AWS_ACCESS_KEY_ID"),

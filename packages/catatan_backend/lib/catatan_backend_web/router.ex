@@ -32,7 +32,7 @@ defmodule CatatanBackendWeb.Router do
     pipe_through :internal_api
 
     scope "/v1" do
-      resources "/email", EmailController, only: [:index]
+      resources "/email/verify", Email.VerifyController, only: [:create]
     end
   end
 end

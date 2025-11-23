@@ -49,7 +49,7 @@ defmodule CatatanBackend.Email.Process do
 
   defp deliver_email(to, subject, html_body_content, text_body_content) do
     from_email =
-      Application.fetch_env!(:catatan_backend, CatatanBackend.MailerInformation)[:from_email]
+      Application.get_env(:catatan_backend, CatatanBackend.MailerInformation)[:from_email]
 
     new()
     |> to(to)
@@ -76,19 +76,19 @@ defmodule CatatanBackend.Email.Process do
     end
   end
 
-  defp normalize_payload(%{"to" => to, "subject" => subject, "type" => type} = payload)
+  defp normalize_payload(%{"to" => to, "subject" => subject, "type" => "registration"} = payload)
        when is_binary(to) and is_binary(subject) do
     {:ok,
      %{
        to: to,
        subject: subject,
-       type: type,
-       data: Map.get(payload, "data", %{})
+       type: :registration,
+       data: atomize_keys(Map.get(payload, "data", %{}))
      }}
   end
 
   defp normalize_payload(%{to: to, subject: subject, type: type} = payload)
-       when is_binary(to) and is_binary(subject) do
+       when is_binary(to) and is_binary(subject) and is_atom(type) do
     {:ok,
      %{
        to: to,
@@ -100,5 +100,12 @@ defmodule CatatanBackend.Email.Process do
 
   defp normalize_payload(payload) do
     {:error, {:invalid_payload, payload}}
+  end
+
+  defp atomize_keys(map) when is_map(map) do
+    Map.new(map, fn
+      {key, value} when is_binary(key) -> {String.to_atom(key), value}
+      {key, value} -> {key, value}
+    end)
   end
 end

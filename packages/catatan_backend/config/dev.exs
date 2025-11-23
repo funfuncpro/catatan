@@ -72,21 +72,14 @@ config :phoenix, :stacktrace_depth, 20
 # Initialize plugs at runtime for faster development compilation
 config :phoenix, :plug_init_mode, :runtime
 
-# Disable swoosh api client as it is only required for production adapters.
-config :swoosh, :api_client, false
-
 config :catatan_backend, :env, :dev
-
-config :catatan_backend, CatatanBackend.Mailer,
-  adapter: Swoosh.Adapters.AmazonSES,
-  region: System.get_env("AWS_SES_REGION"),
-  access_key: System.get_env("AWS_SES_ACCESS_KEY_ID"),
-  secret: System.get_env("AWS_SES_SECRET_ACCESS_KEY")
 
 config :ex_aws,
   access_key_id: System.get_env("AWS_ACCESS_KEY_ID"),
   secret_access_key: System.get_env("AWS_SECRET_ACCESS_KEY"),
   region: System.get_env("AWS_REGION")
+
+config :catatan_backend, CatatanBackend.SESMailer, adapter: Swoosh.Adapters.ExAwsAmazonSES
 
 config :catatan_backend, CatatanBackend.SQS, url: System.get_env("AWS_SQS_URL")
 

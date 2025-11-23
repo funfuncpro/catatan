@@ -12,6 +12,7 @@ defmodule CatatanBackend.Email.SQSPoller do
 
   @impl true
   def init(%{queue_url: _queue_url} = opts) do
+    Logger.info("Starting SQS Poller")
     {:producer, %{queue_url: opts.queue_url, buffer: :queue.new(), demand: 0}}
   end
 
@@ -24,6 +25,15 @@ defmodule CatatanBackend.Email.SQSPoller do
     dispatch_events(queue_url, buffer, new_total_demand)
   end
 
+  @impl true
+  def handle_info(:poll_retry, %{queue_url: queue_url, buffer: buffer, demand: demand} = _state) do
+    if demand > 0 do
+      dispatch_events(queue_url, buffer, demand)
+    else
+      {:noreply, [], %{queue_url: queue_url, buffer: buffer, demand: demand}}
+    end
+  end
+
   defp dispatch_events(queue_url, buffer, demand) do
     {buffered_events, remaining_buffer} = dequeue_events(buffer, demand, [])
     pending_demand = demand - length(buffered_events)
@@ -33,8 +43,15 @@ defmodule CatatanBackend.Email.SQSPoller do
         fetch_count = min(max(@prefetch, pending_demand), @max_sqs_receive)
         fetched = poll_from_sqs(queue_url, fetch_count)
 
-        {to_send, extra} = Enum.split(fetched, pending_demand)
-        {to_send, extra, 0}
+        if length(fetched) == 0 do
+          Process.send_after(self(), :poll_retry, 1_000)
+          {[], [], pending_demand}
+        else
+          # Messages found - process normally
+          Logger.info("Received #{length(fetched)} messages from SQS")
+          {to_send, extra} = Enum.split(fetched, pending_demand)
+          {to_send, extra, 0}
+        end
       else
         {[], [], 0}
       end
@@ -61,11 +78,13 @@ defmodule CatatanBackend.Email.SQSPoller do
     case queue_url
          |> SQS.receive_message(max_number_of_messages: limit, wait_time_seconds: 10)
          |> ExAws.request() do
-      {:ok, %{body: %{"Messages" => messages}}} ->
+      {:ok, %{body: %{messages: messages}} = _response} ->
+        Logger.info("Found #{length(messages)} messages in SQS")
+
         Enum.reduce(messages, [], fn message, acc ->
-          case Jason.decode(message["Body"]) do
+          case Jason.decode(message.body) do
             {:ok, body} ->
-              [%{data: body, receipt_handle: message["ReceiptHandle"]} | acc]
+              [%{data: body, receipt_handle: message.receipt_handle} | acc]
 
             {:error, reason} ->
               Logger.warning("Failed to decode message: #{inspect(reason)}")
@@ -74,7 +93,7 @@ defmodule CatatanBackend.Email.SQSPoller do
         end)
         |> Enum.reverse()
 
-      {:ok, _} ->
+      {:ok, _response} ->
         []
 
       {:error, reason} ->

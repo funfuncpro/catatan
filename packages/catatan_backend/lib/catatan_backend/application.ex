@@ -18,8 +18,7 @@ defmodule CatatanBackend.Application do
          :name,
          :xandra_connection
        )},
-      {CatatanBackend.Email.Producer, []},
-      {CatatanBackend.Email.ProducerConsumer, %{queue_url: queue_url}},
+      {CatatanBackend.Email.Producer, %{queue_url: queue_url}},
       {CatatanBackend.Email.SQSPoller, %{queue_url: queue_url}},
       {CatatanBackend.Email.Process, %{queue_url: queue_url}},
       CatatanBackendWeb.Endpoint

@@ -2,6 +2,7 @@ defmodule CatatanBackend.Email.Templates do
   @moduledoc false
 
   alias CatatanBackend.Template.Registration.Template, as: RegistrationTemplate
+  alias Phoenix.HTML.Safe
 
   @type template_type :: :registration | String.t()
   @type assigns_map :: map()
@@ -17,9 +18,16 @@ defmodule CatatanBackend.Email.Templates do
       template_assigns = %{verification_code: verification_code}
 
       html =
-        RegistrationTemplate.render_html(template_assigns)
+        template_assigns
+        |> RegistrationTemplate.render_html()
+        |> Safe.to_iodata()
+        |> IO.iodata_to_binary()
 
-      text = RegistrationTemplate.render_text(template_assigns)
+      text =
+        template_assigns
+        |> RegistrationTemplate.render_text()
+        |> Safe.to_iodata()
+        |> IO.iodata_to_binary()
 
       {:ok, %{html: html, text: text}}
     end

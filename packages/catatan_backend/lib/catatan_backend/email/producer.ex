@@ -1,10 +1,11 @@
 defmodule CatatanBackend.Email.Producer do
   @moduledoc """
-  This module is for producing email messages to be consumed by the email consumer.
+  This module is for sending email messages directly to SQS.
   """
 
-  use GenStage
+  use GenServer
   require Logger
+  alias ExAws.SQS
 
   @type template_type :: :registration | String.t()
 
@@ -17,71 +18,57 @@ defmodule CatatanBackend.Email.Producer do
 
   defstruct [:to, :subject, :type, data: %{}]
 
-  @max_queue_size 10_000
-
-  def enqueue(payload), do: GenStage.call(__MODULE__, {:enqueue, payload})
-  def enqueue_async(payload), do: GenStage.cast(__MODULE__, {:enqueue, payload})
-  def start_link(opts), do: GenStage.start_link(__MODULE__, opts, name: __MODULE__)
+  def enqueue(payload), do: GenServer.call(__MODULE__, {:enqueue, payload})
+  def enqueue_async(payload), do: GenServer.cast(__MODULE__, {:enqueue, payload})
+  def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   @impl true
-  def init(_) do
-    {:producer,
-     %{
-       queue: :queue.new(),
-       demand: 0
-     }}
+  def init(opts) do
+    {:ok, opts}
   end
 
   @impl true
-  def handle_call({:enqueue, payload}, _from, state) do
-    if :queue.len(state.queue) >= @max_queue_size do
-      Logger.warning("Email queue is full (#{@max_queue_size} items), rejecting new email")
-      {:reply, {:error, :queue_full}, [], state}
-    else
-      new_state = %{state | queue: :queue.in(payload, state.queue)}
-      {events, final_state} = dispatch_event(new_state)
-      {:reply, :ok, events, final_state}
-    end
-  end
+  def handle_call({:enqueue, payload}, _from, %{queue_url: queue_url} = state) do
+    case send_to_sqs(queue_url, payload) do
+      :ok ->
+        Logger.info("Email event sent to SQS: #{inspect(payload)}")
+        {:reply, :ok, state}
 
-  @impl true
-  def handle_cast({:enqueue, payload}, state) do
-    if :queue.len(state.queue) >= @max_queue_size do
-      Logger.warning(
-        "Email queue is full (#{@max_queue_size} items), dropping email: #{inspect(payload)}"
-      )
-
-      {:noreply, [], state}
-    else
-      new_state = %{state | queue: :queue.in(payload, state.queue)}
-      {events, final_state} = dispatch_event(new_state)
-      {:noreply, events, final_state}
-    end
-  end
-
-  @impl true
-  def handle_demand(incoming_demand, state) do
-    new_state = update_in(state.demand, &(&1 + incoming_demand))
-    {events, final_state} = dispatch_event(new_state)
-    {:noreply, events, final_state}
-  end
-
-  defp dispatch_event(state), do: dispatch_events_helper(state, [])
-
-  defp dispatch_events_helper(%{demand: 0} = state, acc) do
-    {Enum.reverse(acc), state}
-  end
-
-  defp dispatch_events_helper(%{queue: queue, demand: demand} = state, acc) do
-    case :queue.out(queue) do
-      {{:value, event}, new_queue} ->
-        dispatch_events_helper(
-          %{state | queue: new_queue, demand: demand - 1},
-          [event | acc]
+      {:error, reason} = error ->
+        Logger.error(
+          "Failed to send email to SQS: #{inspect(reason)}, event: #{inspect(payload)}"
         )
 
-      {:empty, _} ->
-        {Enum.reverse(acc), state}
+        {:reply, error, state}
+    end
+  end
+
+  @impl true
+  def handle_cast({:enqueue, payload}, %{queue_url: queue_url} = state) do
+    case send_to_sqs(queue_url, payload) do
+      :ok ->
+        Logger.info("Email event sent to SQS (async): #{inspect(payload)}")
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to send email to SQS (async): #{inspect(reason)}, event: #{inspect(payload)}"
+        )
+    end
+
+    {:noreply, state}
+  end
+
+  defp send_to_sqs(queue_url, payload) do
+    encoded_payload = Jason.encode!(payload)
+
+    case queue_url
+         |> SQS.send_message(encoded_payload)
+         |> ExAws.request() do
+      {:ok, _response} ->
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 end
