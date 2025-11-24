@@ -15,6 +15,7 @@ defmodule CatatanBackendWeb.SharesValidator do
     types = %{
       note_id: :string,
       access_type: :string,
+      permission_level: :string,
       allowed_emails: {:array, :string}
     }
 
@@ -23,12 +24,23 @@ defmodule CatatanBackendWeb.SharesValidator do
     |> validate_required([:note_id, :access_type, :allowed_emails])
     |> validate_length(:note_id, min: 1)
     |> validate_inclusion(:access_type, ["public", "restricted"])
+    |> validate_inclusion(:permission_level, ["read", "write"])
+    |> put_default_permission_level()
     |> case do
       %Ecto.Changeset{valid?: true, changes: changes} ->
         {:ok, changes}
 
       %Ecto.Changeset{valid?: false, errors: errors} ->
         {:error, Error.format_ecto_error(errors)}
+    end
+  end
+
+  # Helper function to set default permission_level if not provided
+  defp put_default_permission_level(changeset) do
+    if get_field(changeset, :permission_level) == nil do
+      put_change(changeset, :permission_level, "read")
+    else
+      changeset
     end
   end
 

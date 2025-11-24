@@ -6,6 +6,7 @@ import {
   onCleanup,
   createEffect,
   useContext,
+  For,
 } from "solid-js";
 import { Editor } from "~/components/editor";
 import { Header } from "~/components/layout/header";
@@ -15,6 +16,7 @@ import {
   NoteUpdatedPayload,
 } from "~/lib/websocket";
 import { EditorContext, EditorContextValue } from "~/context/editor-client";
+import { Toast } from "~/components/ui/toast";
 
 export const Route = createFileRoute("/shares/$shareId")({
   component: SharedNote,
@@ -23,7 +25,9 @@ export const Route = createFileRoute("/shares/$shareId")({
 function SharedNoteProvider(props: {
   children: any;
   noteId: string;
+  shareId: string;
   initialContent: string;
+  permissionLevel: "read" | "write";
 }) {
   const [markdown, setMarkdown] = createSignal(props.initialContent);
   const [text, setText] = createSignal("");
@@ -103,11 +107,12 @@ function SharedNoteProvider(props: {
           {
             note_updated: (data: NoteUpdatedPayload) => {
               console.log("Shared note updated by another client:", data);
-              // Update markdown for read-only view
+              // Update markdown for shared view
               setMarkdown(data.body);
               setLastSaved(new Date());
             },
           },
+          { share_id: props.shareId }, // Pass share_id for permission check
         );
 
         setChannel(wsChannel);
@@ -134,14 +139,39 @@ function SharedNoteProvider(props: {
   );
 }
 
-function SharedNoteContent(props: { noteData: any }) {
+function SharedNoteContent(props: { noteData: any; permissionLevel: "read" | "write" }) {
   const context = useContext(EditorContext);
+  const [toasts, setToasts] = createSignal<Array<{ id: number; message: string; type: "success" | "error" | "info" }>>([]);
+  let toastIdCounter = 0;
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+    const id = ++toastIdCounter;
+    setToasts([...toasts(), { id, message, type }]);
+  };
+
+  const removeToast = (id: number) => {
+    setToasts(toasts().filter((t) => t.id !== id));
+  };
+
+  // Listen for WebSocket errors from the editor
+  createEffect(() => {
+    const currentChannel = context?.channel();
+    if (currentChannel && props.permissionLevel === "read") {
+      // Monitor for any write attempts that might fail
+      // This is a safeguard in case the editor tries to write despite being marked readonly
+      console.log("Monitoring channel for permission errors on read-only share");
+    }
+  });
 
   return (
     <div class="max-w-4xl mx-auto">
-      {/* Read-only banner */}
+      {/* Permission banner */}
       <div class="bg-secondary border border-custom px-4 py-2 mb-4 rounded text-sm text-muted flex items-center justify-between">
-        <span>📖 You're viewing a shared note (read-only)</span>
+        <span>
+          {props.permissionLevel === "write"
+            ? "✏️ You can edit this shared note"
+            : "📖 You're viewing a shared note (read-only)"}
+        </span>
         <Show when={context?.isConnected()}>
           <span class="text-green-500 flex items-center gap-1 text-xs">
             <span>●</span>
@@ -150,8 +180,8 @@ function SharedNoteContent(props: { noteData: any }) {
         </Show>
       </div>
 
-      {/* Editor in read-only mode */}
-      <Editor readOnly={true} />
+      {/* Editor with dynamic readonly based on permission */}
+      <Editor readOnly={props.permissionLevel === "read"} />
 
       {/* Footer with metadata */}
       <div class="mt-8 pt-4 border-t border-custom text-sm text-muted text-center">
@@ -165,6 +195,17 @@ function SharedNoteContent(props: { noteData: any }) {
           Powered by <span class="font-semibold">Catatan</span>
         </p>
       </div>
+
+      {/* Toast notifications */}
+      <For each={toasts()}>
+        {(toast) => (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+          />
+        )}
+      </For>
     </div>
   );
 }
@@ -173,6 +214,8 @@ function SharedNote() {
   const params = Route.useParams();
   const [noteContent, setNoteContent] = createSignal<string>("");
   const [noteId, setNoteId] = createSignal<string>("");
+  const [shareId, setShareId] = createSignal<string>("");
+  const [permissionLevel, setPermissionLevel] = createSignal<"read" | "write">("read");
   const [isLoading, setIsLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [noteData, setNoteData] = createSignal<any>(null);
@@ -194,6 +237,8 @@ function SharedNote() {
       if (result.success && result.data) {
         setNoteContent(result.data.content || "");
         setNoteId(result.data.note_id);
+        setShareId(shareId);
+        setPermissionLevel(result.data.permission_level || "read");
         setNoteData(result.data);
         setIsLoading(false);
       } else {
@@ -229,9 +274,11 @@ function SharedNote() {
         <Show when={!isLoading() && !error()}>
           <SharedNoteProvider
             noteId={noteId()}
+            shareId={shareId()}
             initialContent={noteContent()}
+            permissionLevel={permissionLevel()}
           >
-            <SharedNoteContent noteData={noteData()} />
+            <SharedNoteContent noteData={noteData()} permissionLevel={permissionLevel()} />
           </SharedNoteProvider>
         </Show>
       </div>

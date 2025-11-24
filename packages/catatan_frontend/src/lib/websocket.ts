@@ -219,6 +219,7 @@ const joinChannel = (
   state: ChannelState,
   onSuccess: MessageCallback<JoinResponse>,
   onError: ErrorCallback,
+  joinPayload: Record<string, any> = {},
 ): void => {
   const msgRef = getNextRef(state);
   const joinRef = assignNewJoinRef(state);
@@ -232,13 +233,14 @@ const joinChannel = (
     }
   });
 
-  sendMessage(state, joinRef, msgRef, state.topic, "phx_join", {});
+  sendMessage(state, joinRef, msgRef, state.topic, "phx_join", joinPayload);
 };
 
 export async function websocketConnectFn(
   noteId: string,
   callbacks?: ChannelCallbacks,
   initialEventHandlers?: EventHandlers,
+  joinPayload?: Record<string, any>,
 ): Promise<PhoenixChannel> {
   const wsURL = getWebsocketURL();
   const channelCallbacks = callbacks || {};
@@ -309,6 +311,7 @@ export async function websocketConnectFn(
             callbacks.onJoinError?.(error);
             reject(error);
           },
+          joinPayload || {},
         );
       };
 

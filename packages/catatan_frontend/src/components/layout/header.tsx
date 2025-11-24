@@ -10,7 +10,9 @@ export function Header() {
   const [shareLink, setShareLink] = createSignal<string | null>(null);
   const [shareError, setShareError] = createSignal<string | null>(null);
   const [showConfigModal, setShowConfigModal] = createSignal(false);
+  const [showShareConfig, setShowShareConfig] = createSignal(false);
   const [accessType, setAccessType] = createSignal<"public" | "restricted">("public",);
+  const [permissionLevel, setPermissionLevel] = createSignal<"read" | "write">("read");
   const [allowedEmails, setAllowedEmails] = createSignal<string[]>([]);
   const [toasts, setToasts] = createSignal<Array<{ id: number; message: string; type: "success" | "error" | "info" }>>([]);
   let toastIdCounter = 0;
@@ -24,18 +26,22 @@ export function Header() {
     setToasts(toasts().filter((t) => t.id !== id));
   };
 
-  const handleShare = async () => {
+  const openShareConfig = () => {
     if (!context?.noteId()) {
       setShareError("No note to share");
       return;
     }
+    setShowShareConfig(true);
+  };
 
+  const handleShare = async () => {
+    setShowShareConfig(false);
     setIsSharing(true);
     setShareError(null);
     setShareLink(null);
 
     try {
-      const currentNoteId = context.noteId();
+      const currentNoteId = context?.noteId();
       console.log("SHARED NOTE_ID: ", currentNoteId)
 
       const response = await fetch(
@@ -49,6 +55,7 @@ export function Header() {
           body: JSON.stringify({
             note_id: currentNoteId,
             access_type: accessType(),
+            permission_level: permissionLevel(),
             allowed_emails: allowedEmails(),
           }),
         },
@@ -80,6 +87,11 @@ export function Header() {
   const closeModal = () => {
     setShareLink(null);
     setShareError(null);
+    setShowShareConfig(false);
+  };
+
+  const closeConfigModal = () => {
+    setShowShareConfig(false);
   };
 
   return (
@@ -94,7 +106,7 @@ export function Header() {
         {/* Share button - only show if there's a note context */}
         <Show when={context?.noteId()}>
           <button
-            onClick={handleShare}
+            onClick={openShareConfig}
             disabled={isSharing()}
             class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-colors"
           >
@@ -103,11 +115,70 @@ export function Header() {
         </Show>
       </header>
 
+      {/* Share configuration modal */}
+      <Show when={showShareConfig()}>
+        <div
+          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={closeConfigModal}
+        >
+          <div
+            class="bg-background border border-custom rounded-lg p-6 max-w-md w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 class="text-xl font-semibold mb-4">Share Settings</h2>
+
+            {/* Permission Level */}
+            <div class="mb-6">
+              <label class="block text-sm font-medium mb-3">Permission</label>
+              <div class="flex gap-3">
+                <button
+                  onClick={() => setPermissionLevel("read")}
+                  class={`flex-1 px-4 py-3 rounded border transition-all ${
+                    permissionLevel() === "read"
+                      ? "border-primary bg-primary bg-opacity-10 font-medium"
+                      : "border-custom hover:border-primary hover:border-opacity-50"
+                  }`}
+                >
+                  Read Only
+                </button>
+                <button
+                  onClick={() => setPermissionLevel("write")}
+                  class={`flex-1 px-4 py-3 rounded border transition-all ${
+                    permissionLevel() === "write"
+                      ? "border-primary bg-primary bg-opacity-10 font-medium"
+                      : "border-custom hover:border-primary hover:border-opacity-50"
+                  }`}
+                >
+                  Can Edit
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div class="flex gap-2">
+              <button
+                onClick={closeConfigModal}
+                class="flex-1 px-4 py-2 bg-secondary border border-custom rounded hover:bg-opacity-90 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleShare}
+                class="flex-1 px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 text-sm font-medium"
+              >
+                Create Link
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
       <ShareModal
         shareLink={shareLink()}
         shareError={shareError()}
         showConfigModal={showConfigModal()}
         accessType={accessType()}
+        permissionLevel={permissionLevel()}
         allowedEmails={allowedEmails()}
         onClose={closeModal}
         onCopy={copyToClipboard}
