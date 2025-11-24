@@ -1,12 +1,28 @@
 import { Link } from "@tanstack/solid-router";
-import { createSignal, Show, useContext } from "solid-js";
+import { createSignal, Show, useContext, For } from "solid-js";
 import { EditorContext } from "~/context/editor-client";
+import { ShareModal } from "./share-modal";
+import { Toast } from "~/components/ui/toast";
 
 export function Header() {
   const context = useContext(EditorContext);
   const [isSharing, setIsSharing] = createSignal(false);
   const [shareLink, setShareLink] = createSignal<string | null>(null);
   const [shareError, setShareError] = createSignal<string | null>(null);
+  const [showConfigModal, setShowConfigModal] = createSignal(false);
+  const [accessType, setAccessType] = createSignal<"public" | "restricted">("public",);
+  const [allowedEmails, setAllowedEmails] = createSignal<string[]>([]);
+  const [toasts, setToasts] = createSignal<Array<{ id: number; message: string; type: "success" | "error" | "info" }>>([]);
+  let toastIdCounter = 0;
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+    const id = ++toastIdCounter;
+    setToasts([...toasts(), { id, message, type }]);
+  };
+
+  const removeToast = (id: number) => {
+    setToasts(toasts().filter((t) => t.id !== id));
+  };
 
   const handleShare = async () => {
     if (!context?.noteId()) {
@@ -20,56 +36,8 @@ export function Header() {
 
     try {
       const currentNoteId = context.noteId();
+      console.log("SHARED NOTE_ID: ", currentNoteId)
 
-      // Step 1: Get all sessions to find the session_id for our current note
-      const sessionsResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/v1/sessions`,
-        {
-          credentials: "include",
-        },
-      );
-
-      const sessionsResult = await sessionsResponse.json();
-      console.log("Sessions result:", sessionsResult);
-
-      if (!sessionsResult.success || !sessionsResult.data?.sessions) {
-        setShareError("Failed to retrieve sessions");
-        setIsSharing(false);
-        return;
-      }
-
-      // Find the session that corresponds to our current note
-      const currentSession = sessionsResult.data.sessions.find(
-        (session: any) => session.note?.note_id === currentNoteId,
-      );
-
-      if (!currentSession) {
-        setShareError("Could not find session for current note");
-        setIsSharing(false);
-        return;
-      }
-
-      console.log("Found session for note:", currentSession.session_id);
-
-      // Step 2: Activate this session so the backend knows which note to share
-      const activateResponse = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/v1/sessions/${currentSession.session_id}/activate`,
-        {
-          method: "PUT",
-          credentials: "include",
-        },
-      );
-
-      const activateResult = await activateResponse.json();
-      console.log("Activate session result:", activateResult);
-
-      if (!activateResult.success) {
-        setShareError("Failed to activate session");
-        setIsSharing(false);
-        return;
-      }
-
-      // Step 3: Now create the share link (backend will use active_session cookie)
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/shares`,
         {
@@ -78,15 +46,19 @@ export function Header() {
             "Content-Type": "application/json",
           },
           credentials: "include",
+          body: JSON.stringify({
+            note_id: currentNoteId,
+            access_type: accessType(),
+            allowed_emails: allowedEmails(),
+          }),
         },
       );
 
       const result = await response.json();
       console.log("Share result:", result);
 
-      if (result.success && result.data?.share_id) {
-        const link = `${window.location.origin}/shares/${result.data.share_id}`;
-        setShareLink(link);
+      if (result.success && result.data?.url) {
+        setShareLink(result.data.url);
       } else {
         setShareError(result.message || "Failed to create share link");
       }
@@ -101,8 +73,7 @@ export function Header() {
   const copyToClipboard = async () => {
     if (shareLink()) {
       await navigator.clipboard.writeText(shareLink()!);
-      // Could add a toast notification here
-      alert("Link copied to clipboard!");
+      showToast("Link copied to clipboard!", "success");
     }
   };
 
@@ -132,53 +103,26 @@ export function Header() {
         </Show>
       </header>
 
-      {/* Share modal */}
-      <Show when={shareLink() || shareError()}>
-        <div
-          class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={closeModal}
-        >
-          <div
-            class="bg-background border border-custom rounded-lg p-6 max-w-md w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Show when={shareLink()}>
-              <h2 class="text-xl font-semibold mb-4">Share Link Created</h2>
-              <p class="text-muted text-sm mb-4">
-                Anyone with this link can view your note (read-only):
-              </p>
-              <div class="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  value={shareLink()!}
-                  readonly
-                  class="flex-1 px-3 py-2 bg-secondary border border-custom rounded text-sm"
-                />
-                <button
-                  onClick={copyToClipboard}
-                  class="px-4 py-2 bg-primary text-background rounded hover:bg-opacity-90 text-sm font-medium"
-                >
-                  Copy
-                </button>
-              </div>
-            </Show>
+      <ShareModal
+        shareLink={shareLink()}
+        shareError={shareError()}
+        showConfigModal={showConfigModal()}
+        accessType={accessType()}
+        allowedEmails={allowedEmails()}
+        onClose={closeModal}
+        onCopy={copyToClipboard}
+      />
 
-            <Show when={shareError()}>
-              <h2 class="text-xl font-semibold mb-4 text-red-500">
-                Error Creating Share
-              </h2>
-              <p class="text-muted text-sm mb-4">{shareError()}</p>
-            </Show>
-
-            <button
-              onClick={closeModal}
-              class="w-full px-4 py-2 bg-secondary border border-custom rounded hover:bg-opacity-90 text-sm font-medium"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </Show>
+      {/* Toast notifications */}
+      <For each={toasts()}>
+        {(toast) => (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => removeToast(toast.id)}
+          />
+        )}
+      </For>
     </>
   );
 }

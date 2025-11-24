@@ -14,43 +14,33 @@ defmodule CatatanBackendWeb.SharesController do
   @doc """
   Creates a shareable link for a note.
   """
-  def create(conn, _params) do
-    case Map.get(conn.assigns, :session_id) do
-      nil ->
+  @doc """
+  Creates or retrieves a shareable link for a note.
+
+  This endpoint is idempotent. If a share link already exists for the
+  given note, it will be returned. Otherwise, a new one will be created.
+  """
+  def create(conn, params) do
+    with {:ok, validated_params} <- SharesValidator.validate_share_creation(params),
+         {:ok, share, status} <- Shares.create_or_get_share(validated_params) do
+      conn
+      |> put_status(status)
+      |> Response.success_response("Share link processed successfully", share)
+    else
+      {:error, :not_found} ->
         conn
-        |> put_status(:unauthorized)
-        |> Response.error_response("No valid session found", %{})
+        |> put_status(:not_found)
+        |> Response.error_response("Note with the given ID not found", %{})
 
-      session_id ->
-        case Sessions.get_note_id(session_id) do
-          {:ok, note_id} ->
-            case Shares.create_share(note_id) do
-              {:ok, share} ->
-                conn
-                |> put_status(:created)
-                |> Response.success_response("Share link created successfully", share)
+      {:error, errors} when is_list(errors) or is_map(errors) ->
+        conn
+        |> put_status(:bad_request)
+        |> Response.error_response("Bad Request", errors)
 
-              {:error, :not_found} ->
-                conn
-                |> put_status(:not_found)
-                |> Response.error_response("Note not found", %{})
-
-              {:error, _reason} ->
-                conn
-                |> put_status(:internal_server_error)
-                |> Response.error_response("Internal server error", %{})
-            end
-
-          {:error, :not_found} ->
-            conn
-            |> put_status(:unauthorized)
-            |> Response.error_response("Invalid session", %{})
-
-          {:error, _reason} ->
-            conn
-            |> put_status(:internal_server_error)
-            |> Response.error_response("Internal server error", %{})
-        end
+      {:error, reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> Response.error_response("Internal server error", %{reason: inspect(reason)})
     end
   end
 
@@ -69,10 +59,10 @@ defmodule CatatanBackendWeb.SharesController do
             |> put_status(:not_found)
             |> Response.error_response("Share link not found", %{})
 
-          {:error, _reason} ->
+          {:error, reason} ->
             conn
             |> put_status(:internal_server_error)
-            |> Response.error_response("Internal server error", %{})
+            |> Response.error_response("Internal server error", %{reason: inspect(reason)})
         end
 
       {:error, errors} ->
