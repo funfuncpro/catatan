@@ -3,7 +3,6 @@ defmodule CatatanBackendWeb.SharesController do
   alias CatatanBackendWeb.SharesValidator
   alias CatatanBackendWeb.Response
   alias CatatanBackend.Shares
-  alias CatatanBackend.Sessions
 
   @moduledoc """
   Controller for handling share-related API requests.
@@ -11,9 +10,6 @@ defmodule CatatanBackendWeb.SharesController do
 
   action_fallback CatatanBackendWeb.FallbackController
 
-  @doc """
-  Creates a shareable link for a note.
-  """
   @doc """
   Creates or retrieves a shareable link for a note.
 
@@ -50,10 +46,12 @@ defmodule CatatanBackendWeb.SharesController do
   def show(conn, %{"id" => share_id}) do
     case SharesValidator.validate_share_retrieval(%{share_id: share_id}) do
       {:ok, _validated_data} ->
-        case Shares.get_note_by_share_id(share_id) do
-          {:ok, note} ->
-            Response.success_response(conn, "success", note)
-
+        with {:ok, share_metadata} <- Shares.get_share_with_metadata(share_id),
+             {:ok, note} <- Shares.get_note_by_share_id(share_id) do
+          # Add permission_level to response
+          response_data = Map.put(note, "permission_level", Map.get(share_metadata, "permission_level", "read"))
+          Response.success_response(conn, "success", response_data)
+        else
           {:error, :not_found} ->
             conn
             |> put_status(:not_found)

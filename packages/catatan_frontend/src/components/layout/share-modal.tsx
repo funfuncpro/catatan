@@ -5,6 +5,7 @@ interface ShareModalProps {
   shareError: string | null;
   showConfigModal: boolean;
   accessType: "public" | "restricted";
+  permissionLevel: "read" | "write";
   allowedEmails: string[];
   onClose: () => void;
   onCopy: () => void;
@@ -26,9 +27,7 @@ export function ShareModal(props: ShareModalProps) {
             <h2 class="text-xl font-semibold mb-4">Share Link Created</h2>
 
             <p class="text-muted text-sm mb-4">
-              {props.accessType === "public"
-                ? "Anyone with this link can view your note (read-only):"
-                : `Only these ${props.allowedEmails.length} email(s) can view this note:`}
+              Anyone with this link can access your note:
             </p>
 
             <Show
