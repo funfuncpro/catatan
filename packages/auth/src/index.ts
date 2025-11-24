@@ -53,15 +53,13 @@ export default {
           copy: {
             error_email_taken: "This email is already registered.",
           },
-          sendCode: async (email, code) => {
-            console.log("	Sending code", code, "to email", email);
-          },
+          sendCode: async (email, code) => {},
           validatePassword: (password) => {
             if (password.length < 8) {
               return "Password must be at least 8 characters long.";
             }
           },
-        }),
+        })
       ),
     },
     subjects,

@@ -9,6 +9,7 @@ defmodule CatatanBackendWeb.SharesValidator do
   @doc """
   Validates the parameters for creating a share link.
   Expects a map with required :note_id, :access_type, and :allowed_emails keys.
+  Expects a map with required :note_id, :access_type, and :allowed_emails keys.
   """
   @spec validate_share_creation(map) :: {:ok, map} | {:error, keyword()}
   def validate_share_creation(params) do
@@ -21,6 +22,7 @@ defmodule CatatanBackendWeb.SharesValidator do
 
     {%{}, types}
     |> cast(params, Map.keys(types))
+    |> validate_required([:note_id, :access_type, :allowed_emails])
     |> validate_required([:note_id, :access_type, :allowed_emails])
     |> validate_length(:note_id, min: 1)
     |> validate_inclusion(:access_type, ["public", "restricted"])

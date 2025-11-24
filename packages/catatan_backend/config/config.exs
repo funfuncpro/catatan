@@ -26,9 +26,6 @@ config :catatan_backend, CatatanBackendWeb.Endpoint,
 # By default it uses the "Local" adapter which stores the emails
 # locally. You can see the emails in your browser, at "/dev/mailbox".
 #
-# For production it's recommended to configure a different adapter
-# at the `config/runtime.exs`.
-config :catatan_backend, CatatanBackend.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configures Elixir's Logger
 config :logger, :default_formatter,

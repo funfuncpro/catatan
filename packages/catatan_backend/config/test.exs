@@ -1,5 +1,33 @@
 import Config
 
+# For development, load environment variables from .env file
+env_filepath = Path.join(File.cwd!(), ".env")
+
+case File.exists?(env_filepath) do
+  true ->
+    case File.read(env_filepath) do
+      {:ok, content} ->
+        content
+        |> String.split("\n", trim: true)
+        |> Enum.reject(&(String.starts_with?(&1, "#") or &1 == ""))
+        |> Enum.each(fn line ->
+          case String.split(line, "=", parts: 2) do
+            [key, value] ->
+              System.put_env(String.trim(key), String.trim(value))
+
+            _ ->
+              IO.warn("Invalid line in .env: #{line}")
+          end
+        end)
+
+      {:error, reason} ->
+        IO.warn("Failed to read .env file: #{inspect(reason)}")
+    end
+
+  false ->
+    IO.warn(".env file not found at #{env_filepath}")
+end
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :catatan_backend, CatatanBackendWeb.Endpoint,
@@ -33,3 +61,15 @@ config :catatan_backend, CatatanBackend.Replica, replica_id: "test_replica"
 config :argon2_elixir,
   t_cost: 1,
   m_cost: 8
+
+config :ex_aws,
+  access_key_id: System.get_env("AWS_ACCESS_KEY_ID"),
+  secret_access_key: System.get_env("AWS_SECRET_ACCESS_KEY"),
+  region: System.get_env("AWS_REGION")
+
+config :catatan_backend, CatatanBackend.Mailer, adapter: Swoosh.Adapters.ExAwsAmazonSES
+
+config :catatan_backend, CatatanBackend.SQS, url: System.get_env("AWS_SQS_URL")
+
+config :catatan_backend, CatatanBackend.MailerInformation,
+  from_email: System.get_env("FROM_EMAIL")

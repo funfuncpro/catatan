@@ -32,16 +32,7 @@ defmodule CatatanBackendWeb.Router do
     pipe_through :internal_api
 
     scope "/v1" do
-      resources "/email", EmailController, only: [:index]
-    end
-  end
-
-  # Enable Swoosh mailbox preview in development
-  if Application.compile_env(:catatan_backend, :dev_routes) do
-    scope "/dev" do
-      pipe_through [:fetch_session, :protect_from_forgery]
-
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
+      resources "/email/verify", Email.VerifyController, only: [:create]
     end
   end
 end

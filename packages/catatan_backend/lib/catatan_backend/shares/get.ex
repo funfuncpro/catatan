@@ -7,6 +7,7 @@ defmodule CatatanBackend.Shares.Get do
 
   @doc """
   Retrieves full share details by share_id from the notes_by_share table.
+  Retrieves full share details by share_id from the notes_by_share table.
   """
   @spec get_share_details_by_share_id(String.t()) :: {:ok, map()} | {:error, :not_found | term()}
   def get_share_details_by_share_id(share_id) do
