@@ -11,13 +11,22 @@ export function Header() {
   const [shareError, setShareError] = createSignal<string | null>(null);
   const [showConfigModal, setShowConfigModal] = createSignal(false);
   const [showShareConfig, setShowShareConfig] = createSignal(false);
-  const [accessType, setAccessType] = createSignal<"public" | "restricted">("public",);
-  const [permissionLevel, setPermissionLevel] = createSignal<"read" | "write">("read");
+  const [accessType, setAccessType] = createSignal<"public" | "restricted">(
+    "public",
+  );
+  const [permissionLevel, setPermissionLevel] = createSignal<"read" | "write">(
+    "read",
+  );
   const [allowedEmails, setAllowedEmails] = createSignal<string[]>([]);
-  const [toasts, setToasts] = createSignal<Array<{ id: number; message: string; type: "success" | "error" | "info" }>>([]);
+  const [toasts, setToasts] = createSignal<
+    Array<{ id: number; message: string; type: "success" | "error" | "info" }>
+  >([]);
   let toastIdCounter = 0;
 
-  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
+  const showToast = (
+    message: string,
+    type: "success" | "error" | "info" = "info",
+  ) => {
     const id = ++toastIdCounter;
     setToasts([...toasts(), { id, message, type }]);
   };
@@ -42,7 +51,7 @@ export function Header() {
 
     try {
       const currentNoteId = context?.noteId();
-      console.log("SHARED NOTE_ID: ", currentNoteId)
+      console.log("SHARED NOTE_ID: ", currentNoteId);
 
       const response = await fetch(
         `${import.meta.env.VITE_API_URL}/api/v1/shares`,

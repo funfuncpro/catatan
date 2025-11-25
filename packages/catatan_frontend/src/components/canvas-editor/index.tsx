@@ -18,7 +18,7 @@ import {
 } from "./editor/layout";
 import { render } from "./editor/render";
 import { calcScrollOffset } from "./editor/viewport";
-import { CursorContext } from "~/context/cursor-context";
+import { CursorContext } from "~/context/cursor";
 
 export function CanvasEditor() {
   let canvasRef!: HTMLCanvasElement;

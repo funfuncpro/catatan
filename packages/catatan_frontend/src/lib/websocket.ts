@@ -16,7 +16,7 @@ type ErrorCallback = (error: Error) => void;
 
 type PendingCallbackEntry = {
   callback: MessageCallback<unknown>;
-  timeoutId: number | null;
+  timeoutId: ReturnType<typeof setTimeout> | null;
 };
 
 export type JoinResponse = {
@@ -37,13 +37,14 @@ export type NoteUpdatedPayload = {
   clock: Record<string, number>;
 };
 
-export type EventHandlers = Record<string, MessageCallback<any>>;
+export type EventHandlers = Record<string, MessageCallback<unknown>>;
 
 export interface ChannelCallbacks {
   onJoin?: (response: JoinResponse) => void;
   onJoinError?: (error: Error) => void;
   onError?: (error: Event) => void;
   onClose?: (event: CloseEvent) => void;
+  onReconnectFailed?: () => void;
 }
 
 export interface PhoenixChannel {
@@ -55,6 +56,16 @@ export interface PhoenixChannel {
   on: <T = unknown>(event: string, callback: MessageCallback<T>) => void;
   off: (event: string) => void;
   disconnect: () => void;
+  isConnected: () => boolean;
+}
+
+export interface WebSocketConfig {
+  heartbeatInterval?: number;
+  maxReconnectDelay?: number;
+  pushTimeout?: number;
+  maxReconnectAttempts?: number;
+  heartbeatTimeout?: number;
+  debug?: boolean;
 }
 
 interface ChannelState {
@@ -64,15 +75,35 @@ interface ChannelState {
   joinRef: string | null;
   pendingCallbacks: Map<string, PendingCallbackEntry>;
   eventHandlers: Map<string, MessageCallback<unknown>>;
-  heartbeatTimer: number | null;
-  reconnectTimer: number | null;
+  heartbeatTimer: ReturnType<typeof setInterval> | null;
+  heartbeatPendingRef: string | null;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
   reconnectAttempts: number;
   isIntentionallyClosed: boolean;
+  isConnecting: boolean;
+  config: Required<WebSocketConfig>;
 }
 
-const HEARTBEAT_INTERVAL = 30000;
-const MAX_RECONNECT_DELAY = 10000;
-const DEFAULT_PUSH_TIMEOUT = 10000;
+const DEFAULT_CONFIG: Required<WebSocketConfig> = {
+  heartbeatInterval: 30000,
+  maxReconnectDelay: 10000,
+  pushTimeout: 10000,
+  maxReconnectAttempts: 10,
+  heartbeatTimeout: 10000,
+  debug: false,
+};
+
+const createLogger = (debug: boolean) => ({
+  log: (...args: unknown[]) => {
+    if (debug) console.log("[WebSocket]", ...args);
+  },
+  error: (...args: unknown[]) => {
+    if (debug) console.error("[WebSocket]", ...args);
+  },
+  warn: (...args: unknown[]) => {
+    if (debug) console.warn("[WebSocket]", ...args);
+  },
+});
 
 export function getWebsocketURL(): string {
   return `${import.meta.env.VITE_API_URL}/socket/notes/websocket`;
@@ -80,6 +111,10 @@ export function getWebsocketURL(): string {
 
 const getNextRef = (state: ChannelState): string => {
   return (++state.messageRef).toString();
+};
+
+const isSocketOpen = (state: ChannelState): boolean => {
+  return state.socket !== null && state.socket.readyState === WebSocket.OPEN;
 };
 
 const sendMessage = <T = unknown>(
@@ -90,24 +125,24 @@ const sendMessage = <T = unknown>(
   event: string,
   payload: T,
 ): void => {
-  if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+  if (!isSocketOpen(state)) {
     throw new Error("WebSocket is not connected");
   }
 
   const message: PhoenixMessage<T> = [joinRef, msgRef, topic, event, payload];
-  state.socket.send(JSON.stringify(message));
+  state.socket!.send(JSON.stringify(message));
 };
 
 const addPendingCallback = (
   state: ChannelState,
   msgRef: string,
   callback: MessageCallback<unknown>,
-  timeout = DEFAULT_PUSH_TIMEOUT,
+  timeout: number,
 ): void => {
-  let timeoutId: number | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   if (timeout > 0) {
-    timeoutId = window.setTimeout(() => {
+    timeoutId = setTimeout(() => {
       state.pendingCallbacks.delete(msgRef);
       callback(new Error("Request timed out"));
     }, timeout);
@@ -159,10 +194,25 @@ const getActiveJoinRef = (state: ChannelState): string => {
   return state.joinRef;
 };
 
-const handleMessage = (state: ChannelState, data: string): void => {
+const handleMessage = (
+  state: ChannelState,
+  data: string,
+  logger: ReturnType<typeof createLogger>,
+): void => {
   try {
     const message: PhoenixMessage = JSON.parse(data);
     const [_joinRef, msgRef, _topic, event, payload] = message;
+
+    // Check if this is a heartbeat response
+    if (
+      msgRef &&
+      state.heartbeatPendingRef &&
+      msgRef === state.heartbeatPendingRef
+    ) {
+      state.heartbeatPendingRef = null;
+      logger.log("Heartbeat acknowledged");
+      return;
+    }
 
     if (msgRef) {
       const callback = takePendingCallback(state, msgRef);
@@ -187,21 +237,35 @@ const handleMessage = (state: ChannelState, data: string): void => {
       handler?.(payload);
     }
   } catch (error) {
-    console.error("Error handling message:", error);
+    logger.error("Error handling message:", error);
   }
 };
 
-const startHeartbeat = (state: ChannelState): void => {
+const startHeartbeat = (
+  state: ChannelState,
+  logger: ReturnType<typeof createLogger>,
+  onHeartbeatTimeout: () => void,
+): void => {
   stopHeartbeat(state);
 
-  state.heartbeatTimer = window.setInterval(() => {
+  state.heartbeatTimer = setInterval(() => {
+    // Check if previous heartbeat was not acknowledged
+    if (state.heartbeatPendingRef !== null) {
+      logger.warn("Heartbeat timeout - server not responding");
+      onHeartbeatTimeout();
+      return;
+    }
+
     try {
       const msgRef = getNextRef(state);
+      state.heartbeatPendingRef = msgRef;
       sendMessage(state, null, msgRef, "phoenix", "heartbeat", {});
+      logger.log("Heartbeat sent");
     } catch (error) {
-      console.error("Heartbeat error:", error);
+      logger.error("Heartbeat error:", error);
+      state.heartbeatPendingRef = null;
     }
-  }, HEARTBEAT_INTERVAL);
+  }, state.config.heartbeatInterval);
 };
 
 const stopHeartbeat = (state: ChannelState): void => {
@@ -209,53 +273,79 @@ const stopHeartbeat = (state: ChannelState): void => {
     clearInterval(state.heartbeatTimer);
     state.heartbeatTimer = null;
   }
+  state.heartbeatPendingRef = null;
 };
 
-const getReconnectDelay = (attempts: number): number => {
-  return Math.min(1000 * Math.pow(2, attempts), MAX_RECONNECT_DELAY);
+const getReconnectDelay = (attempts: number, maxDelay: number): number => {
+  return Math.min(1000 * Math.pow(2, attempts), maxDelay);
 };
 
 const joinChannel = (
   state: ChannelState,
   onSuccess: MessageCallback<JoinResponse>,
   onError: ErrorCallback,
-  joinPayload: Record<string, any> = {},
+  joinPayload: Record<string, unknown> = {},
 ): void => {
   const msgRef = getNextRef(state);
   const joinRef = assignNewJoinRef(state);
 
-  addPendingCallback(state, msgRef, (response: unknown) => {
-    if (response instanceof Error) {
-      state.joinRef = null;
-      onError(response);
-    } else {
-      onSuccess(response as JoinResponse);
-    }
-  });
+  addPendingCallback(
+    state,
+    msgRef,
+    (response: unknown) => {
+      if (response instanceof Error) {
+        state.joinRef = null;
+        onError(response);
+      } else {
+        onSuccess(response as JoinResponse);
+      }
+    },
+    state.config.pushTimeout,
+  );
 
   sendMessage(state, joinRef, msgRef, state.topic, "phx_join", joinPayload);
 };
 
+const cleanupState = (state: ChannelState): void => {
+  stopHeartbeat(state);
+  if (state.reconnectTimer) {
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
+  state.joinRef = null;
+  state.socket = null;
+  state.isConnecting = false;
+};
+
 export async function websocketConnectFn(
-  noteId: string,
+  topic: string,
   callbacks?: ChannelCallbacks,
   initialEventHandlers?: EventHandlers,
-  joinPayload?: Record<string, any>,
+  joinPayload?: Record<string, unknown>,
+  config?: WebSocketConfig,
 ): Promise<PhoenixChannel> {
   const wsURL = getWebsocketURL();
   const channelCallbacks = callbacks || {};
+  const mergedConfig: Required<WebSocketConfig> = {
+    ...DEFAULT_CONFIG,
+    ...config,
+  };
+  const logger = createLogger(mergedConfig.debug);
 
   const state: ChannelState = {
     socket: null,
     messageRef: 0,
-    topic: `note:${noteId}`,
+    topic: topic,
     joinRef: null,
     pendingCallbacks: new Map<string, PendingCallbackEntry>(),
     eventHandlers: new Map(),
     heartbeatTimer: null,
+    heartbeatPendingRef: null,
     reconnectTimer: null,
     reconnectAttempts: 0,
     isIntentionallyClosed: false,
+    isConnecting: false,
+    config: mergedConfig,
   };
 
   if (initialEventHandlers) {
@@ -265,70 +355,108 @@ export async function websocketConnectFn(
   }
 
   const scheduleReconnect = (): void => {
-    if (state.reconnectTimer) return;
+    if (state.reconnectTimer || state.isIntentionallyClosed) return;
 
-    const delay = getReconnectDelay(state.reconnectAttempts);
-    console.log(
-      `Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts + 1})`,
+    if (state.reconnectAttempts >= state.config.maxReconnectAttempts) {
+      logger.error(
+        `Max reconnection attempts (${state.config.maxReconnectAttempts}) reached`,
+      );
+      channelCallbacks.onReconnectFailed?.();
+      return;
+    }
+
+    const delay = getReconnectDelay(
+      state.reconnectAttempts,
+      state.config.maxReconnectDelay,
+    );
+    logger.log(
+      `Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts + 1}/${state.config.maxReconnectAttempts})`,
     );
 
-    state.reconnectTimer = window.setTimeout(() => {
+    state.reconnectTimer = setTimeout(() => {
       state.reconnectTimer = null;
-      console.log("Attempting to reconnect...");
-      connectWebSocket(state, wsURL, channelCallbacks).catch((error) => {
-        console.error("Reconnection failed:", error);
+      logger.log("Attempting to reconnect...");
+      connectWebSocket().catch((error) => {
+        logger.error("Reconnection failed:", error);
       });
     }, delay);
 
     state.reconnectAttempts++;
   };
 
-  const connectWebSocket = (
-    state: ChannelState,
-    wsURL: string,
-    callbacks: ChannelCallbacks,
-  ): Promise<void> => {
+  const handleHeartbeatTimeout = (): void => {
+    logger.warn("Closing connection due to heartbeat timeout");
+    stopHeartbeat(state);
+    state.socket?.close();
+  };
+
+  const connectWebSocket = (): Promise<void> => {
     return new Promise((resolve, reject) => {
+      // Prevent concurrent connection attempts
+      if (state.isConnecting) {
+        reject(new Error("Connection already in progress"));
+        return;
+      }
+
+      state.isConnecting = true;
       state.isIntentionallyClosed = false;
+
       const socket = new WebSocket(`${wsURL}?vsn=2.0.0`);
       state.socket = socket;
 
+      let hasResolved = false;
+
+      const resolveOnce = () => {
+        if (!hasResolved) {
+          hasResolved = true;
+          state.isConnecting = false;
+          resolve();
+        }
+      };
+
+      const rejectOnce = (error: Error) => {
+        if (!hasResolved) {
+          hasResolved = true;
+          state.isConnecting = false;
+          reject(error);
+        }
+      };
+
       socket.onopen = () => {
-        console.log("WebSocket connected");
+        logger.log("WebSocket connected");
         state.reconnectAttempts = 0;
 
         joinChannel(
           state,
           (response) => {
-            startHeartbeat(state);
-            callbacks.onJoin?.(response);
-            resolve();
+            startHeartbeat(state, logger, handleHeartbeatTimeout);
+            channelCallbacks.onJoin?.(response);
+            resolveOnce();
           },
           (error) => {
             stopHeartbeat(state);
             state.isIntentionallyClosed = true;
             state.socket?.close();
-            callbacks.onJoinError?.(error);
-            reject(error);
+            channelCallbacks.onJoinError?.(error);
+            rejectOnce(error);
           },
           joinPayload || {},
         );
       };
 
       socket.onmessage = (event) => {
-        handleMessage(state, event.data);
+        handleMessage(state, event.data, logger);
       };
 
       socket.onerror = (error) => {
-        console.error("WebSocket error:", error);
+        logger.error("WebSocket error:", error);
         const err = new Error("WebSocket connection error");
-        callbacks.onError?.(error);
-        rejectAllPendingCallbacks(state, err);
-        reject(err);
+        channelCallbacks.onError?.(error);
+        rejectOnce(err);
       };
 
       socket.onclose = (event) => {
-        console.log("WebSocket closed:", event.code, event.reason);
+        logger.log("WebSocket closed:", event.code, event.reason);
         stopHeartbeat(state);
         const closeError = new Error(
           `WebSocket closed (${event.code ?? "unknown"})`,
@@ -336,39 +464,58 @@ export async function websocketConnectFn(
         rejectAllPendingCallbacks(state, closeError);
         state.joinRef = null;
         state.socket = null;
-        callbacks.onClose?.(event);
+        state.isConnecting = false;
+        channelCallbacks.onClose?.(event);
 
-        if (!state.isIntentionallyClosed) {
+        // Only schedule reconnect if not intentionally closed and hasn't resolved yet
+        if (!state.isIntentionallyClosed && hasResolved) {
           scheduleReconnect();
         }
       };
     });
   };
 
-  await connectWebSocket(state, wsURL, channelCallbacks);
+  await connectWebSocket();
+
   const push = <TRequest = unknown, TResponse = unknown>(
     event: string,
     payload: TRequest,
   ): Promise<TResponse> => {
     return new Promise((resolve, reject) => {
+      if (!isSocketOpen(state)) {
+        reject(new Error("WebSocket is not connected"));
+        return;
+      }
+
       const msgRef = getNextRef(state);
 
-      addPendingCallback(state, msgRef, (response: unknown) => {
-        if (response instanceof Error) {
-          reject(response);
-        } else {
-          resolve(response as TResponse);
-        }
-      });
-
-      sendMessage(
+      addPendingCallback(
         state,
-        getActiveJoinRef(state),
         msgRef,
-        state.topic,
-        event,
-        payload,
+        (response: unknown) => {
+          if (response instanceof Error) {
+            reject(response);
+          } else {
+            resolve(response as TResponse);
+          }
+        },
+        state.config.pushTimeout,
       );
+
+      try {
+        sendMessage(
+          state,
+          getActiveJoinRef(state),
+          msgRef,
+          state.topic,
+          event,
+          payload,
+        );
+      } catch (error) {
+        // Clean up the pending callback since send failed
+        takePendingCallback(state, msgRef);
+        reject(error);
+      }
     });
   };
 
@@ -385,32 +532,45 @@ export async function websocketConnectFn(
           state.reconnectTimer = null;
         }
 
-        if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
-          state.joinRef = null;
+        if (!isSocketOpen(state)) {
+          cleanupState(state);
           resolve();
           return;
         }
 
         const msgRef = getNextRef(state);
 
-        addPendingCallback(state, msgRef, (response: unknown) => {
-          if (response instanceof Error) {
-            reject(response);
-          } else {
-            state.joinRef = null;
-            resolve();
-          }
-          state.socket?.close();
-        });
-
-        sendMessage(
+        addPendingCallback(
           state,
-          getActiveJoinRef(state),
           msgRef,
-          state.topic,
-          "phx_leave",
-          {},
+          (response: unknown) => {
+            const wasError = response instanceof Error;
+            cleanupState(state);
+            state.socket?.close();
+
+            if (wasError) {
+              reject(response);
+            } else {
+              resolve();
+            }
+          },
+          state.config.pushTimeout,
         );
+
+        try {
+          sendMessage(
+            state,
+            getActiveJoinRef(state),
+            msgRef,
+            state.topic,
+            "phx_leave",
+            {},
+          );
+        } catch (error) {
+          takePendingCallback(state, msgRef);
+          cleanupState(state);
+          reject(error);
+        }
       });
     },
 
@@ -436,6 +596,10 @@ export async function websocketConnectFn(
       state.socket = null;
       state.joinRef = null;
       state.eventHandlers.clear();
+    },
+
+    isConnected: (): boolean => {
+      return isSocketOpen(state) && state.joinRef !== null;
     },
   };
 }

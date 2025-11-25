@@ -5,7 +5,6 @@ export const getEditorSessionFn = createServerFn({ method: "GET" }).handler(
   async () => {
     const session = await useEditorSession();
     if (!session.data?.note_id) return null;
-    console.log("Fetching note data for note ID:", session.data.note_id);
     return fetch(
       `${import.meta.env.VITE_API_URL}/api/v1/notes/${session.data.note_id}`,
     )
