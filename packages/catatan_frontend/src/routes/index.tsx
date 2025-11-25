@@ -4,6 +4,7 @@ import { CanvasEditor } from "~/components/canvas-editor/index";
 import { Header } from "~/components/layout/header";
 import StatusLine from "~/components/layout/statusline";
 import { EditorContextProvider, EditorContext } from "~/context/editor-client";
+import { CursorContextProvider } from "~/context/cursor-context";
 import { getEditorSessionFn } from "~/context/editor";
 
 export const Route = createFileRoute("/")({
@@ -75,7 +76,7 @@ function EditorComp() {
       </Show>
 
       <Show when={!context?.isLoading() && !context?.error()}>
-        <CanvasEditor/>
+        <CanvasEditor />
       </Show>
     </>
   );
@@ -87,11 +88,13 @@ function Login() {
   return (
     <div class="flex flex-col relative w-full text-base ">
       <EditorContextProvider note={loaderData().noteData}>
-        <Header />
-        <div class="relative w-full my-16">
-          <EditorComp />
-          <StatusLine />
-        </div>
+        <CursorContextProvider>
+          <Header />
+          <div class="relative w-full my-16">
+            <EditorComp />
+            <StatusLine />
+          </div>
+        </CursorContextProvider>
       </EditorContextProvider>
     </div>
   );

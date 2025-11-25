@@ -1,11 +1,13 @@
-import { useContext, createMemo, onMount, Show } from "solid-js";
+import { useContext, createMemo } from "solid-js";
 import { EditorContext } from "~/context/editor-client";
+import { CursorContext } from "~/context/cursor-context";
 
 export default function StatusLine() {
-  const context = useContext(EditorContext);
+  const editorContext = useContext(EditorContext);
+  const cursorContext = useContext(CursorContext);
 
   const formatLastUpdated = createMemo(() => {
-    const lastSaved = context?.lastSaved();
+    const lastSaved = editorContext?.lastSaved();
     if (!lastSaved) return "Not saved yet";
 
     const now = new Date();
@@ -19,19 +21,13 @@ export default function StatusLine() {
   });
 
   const noteIdDisplay = createMemo(() => {
-    return context?.noteId() || "Loading...";
+    return editorContext?.noteId() || "Loading...";
   });
 
-  const connectionStatus = createMemo(() => {
-    return context?.isConnected() ? "Connected" : "Disconnected";
-  });
-
-  const connectionColor = createMemo(() => {
-    return context?.isConnected() ? "text-green-500" : "text-red-500";
-  });
-
-  onMount(() => {
-    console.log(context);
+  const cursorPositionDisplay = createMemo(() => {
+    const line = cursorContext?.line() ?? 1;
+    const column = cursorContext?.column() ?? 1;
+    return `${line}:${column}`;
   });
 
   return (
@@ -40,12 +36,14 @@ export default function StatusLine() {
         <div class="text-sm text-muted-foreground">
           Last updated: {formatLastUpdated()}
         </div>
-        <div class={`text-sm flex items-center gap-1 ${connectionColor()}`}>
-          <span>●</span>
-          <span>{connectionStatus()}</span>
-        </div>
       </div>
-      <div class="text-sm text-muted-foreground">ID: {noteIdDisplay()}</div>
+
+      <div class="flex items-center gap-4">
+        <div class="text-sm text-muted-foreground">
+          {cursorPositionDisplay()}
+        </div>
+        <div class="text-sm text-muted-foreground">ID: {noteIdDisplay()}</div>
+      </div>
     </div>
   );
 }
