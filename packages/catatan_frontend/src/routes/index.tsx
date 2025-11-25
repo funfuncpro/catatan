@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { onMount, useContext, Show } from "solid-js";
-import { Editor } from "~/components/editor";
+import { CanvasEditor } from "~/components/canvas-editor/index";
 import { Header } from "~/components/layout/header";
 import StatusLine from "~/components/layout/statusline";
 import { EditorContextProvider, EditorContext } from "~/context/editor-client";
@@ -75,7 +75,7 @@ function EditorComp() {
       </Show>
 
       <Show when={!context?.isLoading() && !context?.error()}>
-        <Editor />
+        <CanvasEditor/>
       </Show>
     </>
   );

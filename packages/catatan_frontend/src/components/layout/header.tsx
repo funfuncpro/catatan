@@ -1,11 +1,8 @@
 import { Link } from "@tanstack/solid-router";
 import { createSignal, Show, useContext, For } from "solid-js";
-import { createSignal, Show, useContext, For } from "solid-js";
 import { EditorContext } from "~/context/editor-client";
-import { ShareModal } from "./share-modal";
 import { Toast } from "~/components/ui/toast";
 import { ShareModal } from "./share-modal";
-import { Toast } from "~/components/ui/toast";
 
 export function Header() {
   const context = useContext(EditorContext);
