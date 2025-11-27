@@ -5,6 +5,17 @@ defmodule CatatanBackend.GenerateID do
   """
 
   @doc """
+  Generates a unique ID using with length
+  """
+  @spec generate_nano_id(number()) :: String.t()
+  def generate_nano_id(length) do
+    Nanoid.generate(
+      size: length,
+      alphabet: "0123456789abcdefghijklmnopqrstuvwxyz"
+    )
+  end
+
+  @doc """
   Generates a unique ID using nanoID.
   """
   def generate_nano_id() do

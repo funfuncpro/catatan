@@ -17,12 +17,16 @@ defmodule CatatanBackendWeb.NoteChannel do
          :ok <- Phoenix.PubSub.subscribe(CatatanBackend.PubSub, "note:" <> validated_id) do
       body = NoteServer.read_body(validated_id)
 
-      socket = socket
+      socket =
+        socket
         |> assign(:note_id, validated_id)
         |> assign(:permission_level, permission_level)
         |> assign(:share_id, share_id)
 
-      Logger.info("Client joined note channel: #{validated_id} with permission: #{permission_level}")
+      Logger.info(
+        "Client joined note channel: #{validated_id} with permission: #{permission_level}"
+      )
+
       {:ok, %{"body" => body, "permission_level" => permission_level}, socket}
     else
       {:error, errors} ->
@@ -65,7 +69,9 @@ defmodule CatatanBackendWeb.NoteChannel do
 
       "read" ->
         Logger.warning("Attempted write on read-only share: #{socket.assigns[:share_id]}")
-        {:reply, {:error, %{reason: "permission_denied", message: "This is a read-only share"}}, socket}
+
+        {:reply, {:error, %{reason: "permission_denied", message: "This is a read-only share"}},
+         socket}
 
       _ ->
         {:reply, {:error, %{reason: "invalid_permission"}}, socket}
@@ -96,7 +102,8 @@ defmodule CatatanBackendWeb.NoteChannel do
   defp get_permission_level(share_id, _note_id) do
     case Shares.Get.get_permission_level(share_id) do
       {:ok, level} -> {:ok, level}
-      {:error, _} -> {:ok, "read"}  # Default to read-only on error
+      # Default to read-only on error
+      {:error, _} -> {:ok, "read"}
     end
   end
 

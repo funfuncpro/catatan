@@ -28,7 +28,9 @@ case File.exists?(env_filepath) do
     IO.warn(".env file not found at #{env_filepath}")
 end
 
-config :catatan_backend, :frontend_host, System.get_env("FRONTEND_HOST") || "http://localhost:3000"
+config :catatan_backend,
+       :frontend_host,
+       System.get_env("FRONTEND_HOST") || "http://localhost:3000"
 
 # For development, read and load environment variables from .env file
 

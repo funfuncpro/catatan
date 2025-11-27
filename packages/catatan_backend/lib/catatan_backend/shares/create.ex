@@ -9,8 +9,22 @@ defmodule CatatanBackend.Shares.Create do
   Inserts a new share link into Cassandra.
   It inserts into both the 'notes_by_share' and 'shares_by_note_id' tables.
   """
-  @spec insert_share_batch(String.t(), String.t(), String.t(), String.t(), list(String.t()), integer()) :: {:ok, map()} | {:error, term()}
-  def insert_share_batch(share_id, note_id, access_type, permission_level, allowed_emails, timestamp) do
+  @spec insert_share_batch(
+          String.t(),
+          String.t(),
+          String.t(),
+          String.t(),
+          list(String.t()),
+          integer()
+        ) :: {:ok, map()} | {:error, term()}
+  def insert_share_batch(
+        share_id,
+        note_id,
+        access_type,
+        permission_level,
+        allowed_emails,
+        timestamp
+      ) do
     insert_shares_by_id_cql =
       "INSERT INTO catatan_keyspaces.notes_by_share (share_id, note_id, access_type, permission_level, allowed_emails, created_at) VALUES (?, ?, ?, ?, ?, ?)"
 
@@ -21,9 +35,18 @@ defmodule CatatanBackend.Shares.Create do
     allowed_emails_set = MapSet.new(allowed_emails)
 
     with {:ok, prepared1} <- CassandraClient.prepare(insert_shares_by_id_cql),
-         {:ok, _} <- CassandraClient.execute(prepared1, [share_id, note_id, access_type, permission_level, allowed_emails_set, timestamp]),
+         {:ok, _} <-
+           CassandraClient.execute(prepared1, [
+             share_id,
+             note_id,
+             access_type,
+             permission_level,
+             allowed_emails_set,
+             timestamp
+           ]),
          {:ok, prepared2} <- CassandraClient.prepare(insert_shares_by_note_id_cql),
-         {:ok, _} <- CassandraClient.execute(prepared2, [note_id, share_id, access_type, permission_level]) do
+         {:ok, _} <-
+           CassandraClient.execute(prepared2, [note_id, share_id, access_type, permission_level]) do
       {:ok,
        %{
          "share_id" => share_id,
@@ -42,7 +65,8 @@ defmodule CatatanBackend.Shares.Create do
   Updates an existing share link's permission_level and access_type.
   Updates both the 'notes_by_share' and 'shares_by_note_id' tables.
   """
-  @spec update_share_batch(String.t(), String.t(), String.t(), String.t(), list(String.t())) :: {:ok, map()} | {:error, term()}
+  @spec update_share_batch(String.t(), String.t(), String.t(), String.t(), list(String.t())) ::
+          {:ok, map()} | {:error, term()}
   def update_share_batch(share_id, note_id, access_type, permission_level, allowed_emails) do
     update_shares_by_id_cql =
       "UPDATE catatan_keyspaces.notes_by_share SET access_type = ?, permission_level = ?, allowed_emails = ? WHERE share_id = ?"
@@ -54,7 +78,13 @@ defmodule CatatanBackend.Shares.Create do
     allowed_emails_set = MapSet.new(allowed_emails)
 
     with {:ok, prepared1} <- CassandraClient.prepare(update_shares_by_id_cql),
-         {:ok, _} <- CassandraClient.execute(prepared1, [access_type, permission_level, allowed_emails_set, share_id]),
+         {:ok, _} <-
+           CassandraClient.execute(prepared1, [
+             access_type,
+             permission_level,
+             allowed_emails_set,
+             share_id
+           ]),
          {:ok, prepared2} <- CassandraClient.prepare(update_shares_by_note_id_cql),
          {:ok, _} <- CassandraClient.execute(prepared2, [access_type, permission_level, note_id]) do
       {:ok,

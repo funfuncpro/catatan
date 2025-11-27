@@ -66,7 +66,10 @@ if config_env() == :prod do
   port = String.to_integer(System.get_env("PORT") || "8000")
 
   config :catatan_backend, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
-  config :catatan_backend, :frontend_host, System.get_env("FRONTEND_HOST") || "https://catatan.app"
+
+  config :catatan_backend,
+         :frontend_host,
+         System.get_env("FRONTEND_HOST") || "https://catatan.app"
 
   config :catatan_backend, CatatanBackendWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],

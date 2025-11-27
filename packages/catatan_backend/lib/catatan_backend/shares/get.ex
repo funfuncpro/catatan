@@ -12,7 +12,9 @@ defmodule CatatanBackend.Shares.Get do
   @spec get_share_details_by_share_id(String.t()) :: {:ok, map()} | {:error, :not_found | term()}
   def get_share_details_by_share_id(share_id) do
     # Query all details from the new notes_by_share table
-    query = "SELECT share_id, note_id, access_type, permission_level, allowed_emails, created_at FROM catatan_keyspaces.notes_by_share WHERE share_id = :share_id"
+    query =
+      "SELECT share_id, note_id, access_type, permission_level, allowed_emails, created_at FROM catatan_keyspaces.notes_by_share WHERE share_id = :share_id"
+
     params = %{"share_id" => share_id}
 
     with {:ok, prepared} <- CassandraClient.prepare(query),
@@ -20,7 +22,9 @@ defmodule CatatanBackend.Shares.Get do
       rows = Enum.to_list(result)
 
       case rows do
-        [] -> {:error, :not_found}
+        [] ->
+          {:error, :not_found}
+
         [share_details] ->
           # Ensure backward compatibility - default to "read" if NULL
           details_with_permission = Map.put_new(share_details, "permission_level", "read")
@@ -50,7 +54,9 @@ defmodule CatatanBackend.Shares.Get do
   """
   @spec by_note_id(String.t()) :: {:ok, map()} | {:error, :not_found | term()}
   def by_note_id(note_id) do
-    query = "SELECT share_id, access_type, permission_level FROM catatan_keyspaces.shares_by_note_id WHERE note_id = :note_id"
+    query =
+      "SELECT share_id, access_type, permission_level FROM catatan_keyspaces.shares_by_note_id WHERE note_id = :note_id"
+
     params = %{"note_id" => note_id}
 
     with {:ok, prepared} <- CassandraClient.prepare(query),
@@ -58,7 +64,9 @@ defmodule CatatanBackend.Shares.Get do
       rows = Enum.to_list(result)
 
       case rows do
-        [] -> {:error, :not_found}
+        [] ->
+          {:error, :not_found}
+
         [share] ->
           # Ensure backward compatibility - default to "read" if NULL
           share_with_permission = Map.put_new(share, "permission_level", "read")

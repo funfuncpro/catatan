@@ -18,7 +18,12 @@ defmodule CatatanBackend.Shares do
   Expected params: %{note_id: String.t(), access_type: String.t(), permission_level: String.t(), allowed_emails: list(String.t())}
   """
   @spec create_or_get_share(map()) :: {:ok, map(), :created | :ok} | {:error, term()}
-  def create_or_get_share(%{note_id: note_id, access_type: access_type, permission_level: permission_level, allowed_emails: allowed_emails}) do
+  def create_or_get_share(%{
+        note_id: note_id,
+        access_type: access_type,
+        permission_level: permission_level,
+        allowed_emails: allowed_emails
+      }) do
     frontend_host = Application.get_env(:catatan_backend, :frontend_host)
 
     with {:ok, share_data} <- Get.by_note_id(note_id) do
@@ -29,7 +34,14 @@ defmodule CatatanBackend.Shares do
       # Check if permission or access_type has changed
       if existing_permission != permission_level or existing_access_type != access_type do
         # Update the existing share with new permission/access settings
-        with {:ok, _updated_share} <- Create.update_share_batch(share_id, note_id, access_type, permission_level, allowed_emails) do
+        with {:ok, _updated_share} <-
+               Create.update_share_batch(
+                 share_id,
+                 note_id,
+                 access_type,
+                 permission_level,
+                 allowed_emails
+               ) do
           {:ok, %{"share_id" => share_id, "url" => "#{frontend_host}/shares/#{share_id}"}, :ok}
         else
           {:error, reason} -> {:error, reason}
@@ -41,18 +53,30 @@ defmodule CatatanBackend.Shares do
     else
       {:error, :not_found} ->
         # No share link exists, create a new one
-        with {:ok, _note} <- CatatanBackend.Notes.get_note_by_id(note_id), # Authorization check would go here if enabled
+        # Authorization check would go here if enabled
+        with {:ok, _note} <- CatatanBackend.Notes.get_note_by_id(note_id),
              new_share_id <- GenerateID.generate_nano_id(),
              timestamp <- DateTime.utc_now() |> DateTime.to_unix(:millisecond),
-             {:ok, _share} <- Create.insert_share_batch(new_share_id, note_id, access_type, permission_level, allowed_emails, timestamp) do
-          {:ok, %{"share_id" => new_share_id, "url" => "#{frontend_host}/shares/#{new_share_id}"}, :created}
+             {:ok, _share} <-
+               Create.insert_share_batch(
+                 new_share_id,
+                 note_id,
+                 access_type,
+                 permission_level,
+                 allowed_emails,
+                 timestamp
+               ) do
+          {:ok, %{"share_id" => new_share_id, "url" => "#{frontend_host}/shares/#{new_share_id}"},
+           :created}
         else
           {:error, :not_found} ->
-            {:error, :not_found} # Note does not exist
+            # Note does not exist
+            {:error, :not_found}
 
           {:error, reason} ->
             {:error, reason}
         end
+
       {:error, reason} ->
         {:error, reason}
     end
