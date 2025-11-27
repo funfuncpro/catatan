@@ -7,59 +7,67 @@ defmodule CatatanBackend.Email.SQSPoller do
 
   @prefetch 10
   @max_sqs_receive 10
+  @initial_backoff 1_000
+  @max_backoff 30_000
 
   def start_link(opts), do: GenStage.start_link(__MODULE__, opts, name: __MODULE__)
 
   @impl true
   def init(%{queue_url: _queue_url} = opts) do
     Logger.info("Starting SQS Poller")
-    {:producer, %{queue_url: opts.queue_url, buffer: :queue.new(), demand: 0}}
+
+    {:producer,
+     %{queue_url: opts.queue_url, buffer: :queue.new(), demand: 0, backoff: @initial_backoff}}
   end
 
   @impl true
   def handle_demand(
         incoming_demand,
-        %{queue_url: queue_url, buffer: buffer, demand: demand} = _state
+        %{queue_url: queue_url, buffer: buffer, demand: demand, backoff: backoff} = _state
       ) do
     new_total_demand = demand + incoming_demand
-    dispatch_events(queue_url, buffer, new_total_demand)
+    dispatch_events(queue_url, buffer, new_total_demand, backoff)
   end
 
   @impl true
-  def handle_info(:poll_retry, %{queue_url: queue_url, buffer: buffer, demand: demand} = _state) do
+  def handle_info(
+        :poll_retry,
+        %{queue_url: queue_url, buffer: buffer, demand: demand, backoff: backoff} = _state
+      ) do
     if demand > 0 do
-      dispatch_events(queue_url, buffer, demand)
+      dispatch_events(queue_url, buffer, demand, backoff)
     else
-      {:noreply, [], %{queue_url: queue_url, buffer: buffer, demand: demand}}
+      {:noreply, [], %{queue_url: queue_url, buffer: buffer, demand: demand, backoff: backoff}}
     end
   end
 
-  defp dispatch_events(queue_url, buffer, demand) do
+  defp dispatch_events(queue_url, buffer, demand, backoff) do
     {buffered_events, remaining_buffer} = dequeue_events(buffer, demand, [])
     pending_demand = demand - length(buffered_events)
 
-    {new_events, overflow, final_demand} =
+    {new_events, overflow, final_demand, new_backoff} =
       if pending_demand > 0 do
         fetch_count = min(max(@prefetch, pending_demand), @max_sqs_receive)
         fetched = poll_from_sqs(queue_url, fetch_count)
 
         if length(fetched) == 0 do
-          Process.send_after(self(), :poll_retry, 1_000)
-          {[], [], pending_demand}
+          Logger.debug("No messages found, retrying in #{backoff}ms")
+          Process.send_after(self(), :poll_retry, backoff)
+          next_backoff = min(backoff * 2, @max_backoff)
+          {[], [], pending_demand, next_backoff}
         else
-          # Messages found - process normally
           Logger.info("Received #{length(fetched)} messages from SQS")
           {to_send, extra} = Enum.split(fetched, pending_demand)
-          {to_send, extra, 0}
+          {to_send, extra, 0, @initial_backoff}
         end
       else
-        {[], [], 0}
+        {[], [], 0, backoff}
       end
 
     new_buffer = Enum.reduce(overflow, remaining_buffer, &:queue.in(&1, &2))
 
     {:noreply, buffered_events ++ new_events,
-     %{queue_url: queue_url, buffer: new_buffer, demand: final_demand}}
+     %{queue_url: queue_url, buffer: new_buffer, demand: final_demand, backoff: new_backoff}}
   end
 
   defp dequeue_events(queue, 0, acc), do: {Enum.reverse(acc), queue}

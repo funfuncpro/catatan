@@ -4,6 +4,7 @@ defmodule CatatanBackend.Cursor do
           y: non_neg_integer()
         }
 
+  @derive Jason.Encoder
   defstruct x: 0, y: 0
 
   @spec initialize :: t

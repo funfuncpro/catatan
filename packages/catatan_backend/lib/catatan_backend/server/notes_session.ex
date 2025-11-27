@@ -7,7 +7,7 @@ defmodule CatatanBackend.Server.NotesSession do
   require Logger
   alias CatatanBackend.Actor.Writer
 
-  @tick_interval_ms 50
+  @tick_interval_ms 200
 
   @doc """
   Starts the Session Server for a specific Note ID.
@@ -34,9 +34,10 @@ defmodule CatatanBackend.Server.NotesSession do
 
   @doc """
   Called when a user connects via WebSocket.
-  Returns {:ok, list_of_current_writers} so the frontend can init.
+  Returns {:ok, writer, writers_map} so the frontend can init with O(1) lookup.
   """
-  @spec join(String.t(), Writer.user_profile()) :: {:ok, [Writer.t()]}
+  @spec join(String.t(), Writer.user_profile() | nil) ::
+          {:ok, Writer.t(), %{String.t() => Writer.t()}}
   def join(note_id, user_profile) do
     GenServer.call(via_tuple(note_id), {:join, user_profile})
   end
@@ -58,11 +59,23 @@ defmodule CatatanBackend.Server.NotesSession do
   end
 
   @impl true
+  def handle_call({:join, nil}, _from, state) do
+    new_writer = Writer.initialize_actor()
+    new_writers = Map.put(state.writers, new_writer.id, new_writer)
+
+    broadcast_state(state.note_id, new_writers)
+    new_state = %{state | writers: new_writers, dirty: false}
+    {:reply, {:ok, new_writer, new_writers}, new_state}
+  end
+
+  @impl true
   def handle_call({:join, user_profile}, _from, state) do
     new_writer = Writer.initialize_actor(user_profile)
     new_writers = Map.put(state.writers, new_writer.id, new_writer)
-    new_state = %{state | writers: new_writers, dirty: true}
-    {:reply, {:ok, Map.values(new_writers)}, new_state}
+
+    broadcast_state(state.note_id, new_writers)
+    new_state = %{state | writers: new_writers, dirty: false}
+    {:reply, {:ok, new_writer, new_writers}, new_state}
   end
 
   @impl true
@@ -82,7 +95,13 @@ defmodule CatatanBackend.Server.NotesSession do
   def handle_cast({:leave, user_id}, state) do
     if Map.has_key?(state.writers, user_id) do
       new_writers = Map.delete(state.writers, user_id)
-      {:noreply, %{state | writers: new_writers, dirty: true}}
+      new_state = %{state | writers: new_writers, dirty: true}
+
+      if map_size(new_writers) == 0 do
+        {:stop, :normal, new_state}
+      else
+        {:noreply, new_state}
+      end
     else
       {:noreply, state}
     end
@@ -103,10 +122,11 @@ defmodule CatatanBackend.Server.NotesSession do
     topic = "notes:#{note_id}"
 
     payload = %{
-      writers: Map.values(writers_map)
+      event: "presence_state",
+      writers: writers_map
     }
 
-    CatatanBackendWeb.Endpoint.broadcast!(topic, "presence_state", payload)
+    Phoenix.PubSub.broadcast(CatatanBackend.PubSub, topic, {:presence_state, payload})
   end
 
   defp via_tuple(note_id), do: {:via, Registry, {CatatanBackend.Registry, "session_#{note_id}"}}

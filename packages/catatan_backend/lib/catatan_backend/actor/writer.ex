@@ -17,6 +17,7 @@ defmodule CatatanBackend.Actor.Writer do
           cursor: Cursor.t()
         }
 
+  @derive Jason.Encoder
   defstruct [:id, :name, :permission, :cursor]
 
   @spec initialize_actor(user_profile()) :: t()

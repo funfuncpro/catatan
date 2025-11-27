@@ -109,7 +109,7 @@ defmodule CatatanBackend.Server.Notes do
     NoteCrdt.new(note_id, replica_id)
   end
 
-  defp via(note_id), do: {:via, Registry, {CatatanBackend.Notes.Registry, note_id}}
+  defp via(note_id), do: {:via, Registry, {CatatanBackend.Registry, note_id}}
 
   @spec broadcast_updated(String.t(), String.t(), non_neg_integer()) :: :ok | {:error, term()}
   defp broadcast_updated(note_id, body, clock) do

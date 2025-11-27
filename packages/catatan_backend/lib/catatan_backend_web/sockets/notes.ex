@@ -1,8 +1,8 @@
-defmodule CatatanBackendWeb.NoteSocket do
+defmodule CatatanBackendWeb.NotesSocket do
   use Phoenix.Socket
   require Logger
 
-  channel "note:*", CatatanBackendWeb.NoteChannel
+  channel "notes:*", CatatanBackendWeb.Channels.Notes
 
   @impl true
   def connect(_params, socket, _connect_info) do

@@ -13,7 +13,7 @@ defmodule CatatanBackendWeb.Endpoint do
     same_site: "Lax"
   ]
 
-  socket "/socket/notes", CatatanBackendWeb.NoteSocket,
+  socket "/socket/notes", CatatanBackendWeb.NotesSocket,
     websocket: true,
     longpoll: false
 
