@@ -56,9 +56,11 @@ defmodule CatatanBackend.Email.SQSPoller do
           next_backoff = min(backoff * 2, @max_backoff)
           {[], [], pending_demand, next_backoff}
         else
-          Logger.info("Received #{length(fetched)} messages from SQS")
+          Logger.debug("Received #{length(fetched)} messages from SQS")
           {to_send, extra} = Enum.split(fetched, pending_demand)
-          {to_send, extra, 0, @initial_backoff}
+          # Schedule next poll to keep the polling loop going
+          Process.send_after(self(), :poll_retry, 0)
+          {to_send, extra, pending_demand - length(to_send), @initial_backoff}
         end
       else
         {[], [], 0, backoff}

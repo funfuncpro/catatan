@@ -20,7 +20,8 @@ defmodule CatatanBackend.Email.Process do
   @impl true
   @spec init(%{queue_url: String.t()}) :: {:consumer}
   def init(opts) do
-    {:consumer, opts, subscribe_to: [CatatanBackend.Email.SQSPoller]}
+    {:consumer, opts,
+     subscribe_to: [{CatatanBackend.Email.SQSPoller, max_demand: 10, min_demand: 1}]}
   end
 
   @impl true

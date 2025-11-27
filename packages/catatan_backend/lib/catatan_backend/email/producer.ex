@@ -31,7 +31,7 @@ defmodule CatatanBackend.Email.Producer do
   def handle_call({:enqueue, payload}, _from, %{queue_url: queue_url} = state) do
     case send_to_sqs(queue_url, payload) do
       :ok ->
-        Logger.info("Email event sent to SQS: #{inspect(payload)}")
+        Logger.debug("Email event sent to SQS: #{inspect(payload)}")
         {:reply, :ok, state}
 
       {:error, reason} = error ->
@@ -47,7 +47,7 @@ defmodule CatatanBackend.Email.Producer do
   def handle_cast({:enqueue, payload}, %{queue_url: queue_url} = state) do
     case send_to_sqs(queue_url, payload) do
       :ok ->
-        Logger.info("Email event sent to SQS (async): #{inspect(payload)}")
+        Logger.debug("Email event sent to SQS (async): #{inspect(payload)}")
 
       {:error, reason} ->
         Logger.error(
