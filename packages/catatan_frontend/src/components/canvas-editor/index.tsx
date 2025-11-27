@@ -277,7 +277,6 @@ export function CanvasEditor() {
       );
     };
 
-    // Clipboard handlers
     const onCopy = (e: ClipboardEvent) => {
       e.preventDefault();
       const text = getSelectedText(state());
@@ -313,7 +312,7 @@ export function CanvasEditor() {
     canvasRef.addEventListener("mousedown", onMouseDown);
     canvasRef.addEventListener("mousemove", onMouseMove);
     canvasRef.addEventListener("mouseup", onMouseUp);
-    window.addEventListener("mouseup", onMouseUp); // Handle mouseup outside canvas
+    window.addEventListener("mouseup", onMouseUp);
     canvasRef.addEventListener("wheel", onWheel, { passive: false });
     canvasRef.addEventListener("copy", onCopy);
     canvasRef.addEventListener("cut", onCut);
