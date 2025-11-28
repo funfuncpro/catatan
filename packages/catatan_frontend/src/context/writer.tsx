@@ -11,7 +11,6 @@ export interface WriterContextValue {
   updateCollaborator: (collaborator: Actor.Writer) => void;
   removeCollaborator: (collaboratorId: string) => void;
 
-  /** Initialize from join response - sets current writer and all collaborators */
   initializeFromJoinResponse: (
     myWriterId: string,
     writers: Actor.WritersMap,
@@ -57,13 +56,11 @@ export function WriterContextProvider(props: {
     myWriterId: string,
     writers: Actor.WritersMap,
   ) => {
-    // Extract current user's writer
     const myWriter = writers[myWriterId];
     if (myWriter) {
       setWriter(myWriter);
     }
 
-    // Set all other writers as collaborators (excluding self)
     const otherWriters = { ...writers };
     delete otherWriters[myWriterId];
     setCollaborators(otherWriters);

@@ -23,7 +23,6 @@ export interface ConnectionContextValue {
   channel: Accessor<PhoenixChannel | null>;
   setIsConnected: Setter<boolean>;
   activeWriterId: Accessor<string | null>;
-  sendCursorPosition: (x: number, y: number) => void;
 }
 
 export const ConnectionContext = createContext<ConnectionContextValue>();
@@ -37,22 +36,11 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
   const cursorContext = useContext(CursorContext);
   const writerContext = useContext(WriterContext);
 
-  /** Send local cursor position to server */
-  const sendCursorPosition = (x: number, y: number) => {
-    const ch = channel();
-    if (ch && isConnected()) {
-      ch.push("cursor_move", { x, y }).catch((err) => {
-        console.error("Failed to send cursor position:", err);
-      });
-    }
-  };
-
   const contextValue: ConnectionContextValue = {
     isConnected,
     setIsConnected,
     channel,
     activeWriterId,
-    sendCursorPosition,
   };
 
   createEffect(() => {
@@ -69,12 +57,10 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       const { my_writer_id, writers } = response;
       setActiveWriterId(my_writer_id);
 
-      // Initialize writer context with all writers from join response
       if (writerContext) {
         writerContext.initializeFromJoinResponse(my_writer_id, writers);
       }
 
-      // Initialize remote cursors (excluding our own)
       if (cursorContext) {
         const remoteCursors: Record<string, { x: number; y: number }> = {};
         for (const [id, writer] of Object.entries(writers)) {
@@ -92,14 +78,12 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
 
       if (!currentWriterId) return;
 
-      // Update collaborators in writer context
       if (writerContext) {
         const otherWriters = { ...writers };
         delete otherWriters[currentWriterId];
         writerContext.setCollaborators(otherWriters);
       }
 
-      // Update remote cursors
       if (cursorContext) {
         const remoteCursors: Record<string, { x: number; y: number }> = {};
         for (const [id, writer] of Object.entries(writers)) {
@@ -137,6 +121,17 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
         setActiveWriterId(null);
       }
     });
+  });
+
+  createEffect(() => {
+    const line = cursorContext?.line();
+    const column = cursorContext?.column();
+    const ch = channel();
+    if (ch && isConnected() && line !== undefined && column !== undefined) {
+      ch.push("cursor_move", { x: column, y: line }).catch((err) => {
+        console.error("Failed to send cursor position:", err);
+      });
+    }
   });
 
   return (
