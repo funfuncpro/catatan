@@ -6,6 +6,7 @@ import { ConnectionContextProvider } from "~/context/connection";
 import { CursorContextProvider } from "~/context/cursor";
 import { getEditorSessionFn } from "~/context/editor";
 import { NotesContextProvider } from "~/context/notes";
+import { WriterContextProvider } from "~/context/writer";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -21,15 +22,17 @@ function Index() {
   return (
     <div class="flex flex-col relative w-full text-base ">
       <NotesContextProvider noteID={loaderData().noteData?.noteId}>
-        <ConnectionContextProvider>
-          <CursorContextProvider>
-            <Header />
-            <div class="relative w-full my-16">
-              <CanvasEditor />
-              <StatusLine />
-            </div>
-          </CursorContextProvider>
-        </ConnectionContextProvider>
+        <CursorContextProvider>
+          <WriterContextProvider>
+            <ConnectionContextProvider>
+              <Header />
+              <div class="relative w-full my-16">
+                <CanvasEditor />
+                <StatusLine />
+              </div>
+            </ConnectionContextProvider>
+          </WriterContextProvider>
+        </CursorContextProvider>
       </NotesContextProvider>
     </div>
   );

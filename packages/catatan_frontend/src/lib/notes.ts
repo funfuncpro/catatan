@@ -1,20 +1,49 @@
 import { Notes } from "~/types/note";
-import { websocketConnectFn } from "./websocket";
+import { Actor } from "~/types/actor";
+import { websocketConnectFn, PhoenixChannel } from "./websocket";
+
+/** Response received when joining the notes channel */
+export interface JoinResponse {
+  my_writer_id: string;
+  writers: Actor.WritersMap;
+}
+
+/** Presence state event payload from server */
+export interface PresenceStatePayload {
+  event: "presence_state";
+  writers: Actor.WritersMap;
+}
+
+/** Callbacks for notes channel events */
+export interface NotesChannelCallbacks {
+  setIsConnected: (connected: boolean) => void;
+  onJoinSuccess?: (response: JoinResponse) => void;
+  onPresenceState?: (payload: PresenceStatePayload) => void;
+}
 
 export async function createNotesChannel({
   noteID,
   setIsConnected,
-}: {
-  noteID: string;
-  setIsConnected: (connected: boolean) => void;
-}) {
-  const connectionKey = `note:${noteID}`;
+  onJoinSuccess,
+  onPresenceState,
+}: NotesChannelCallbacks & { noteID: string }): Promise<
+  PhoenixChannel | undefined
+> {
+  const connectionKey = `notes:${noteID}`;
+  const url = `${import.meta.env.VITE_API_URL}/socket/notes/websocket`;
 
   try {
-    const channel = await websocketConnectFn(connectionKey, {
+    const channel = await websocketConnectFn(url, connectionKey, {
       onJoin(response) {
-        console.log("Connected to notes channel:", response.body);
+        console.log("Connected to notes channel:", response);
         setIsConnected(true);
+
+        // The server returns { my_writer_id: string, writers: { id: Writer, ... } }
+        const joinResponse = response as unknown as JoinResponse;
+
+        if (joinResponse.writers && joinResponse.my_writer_id) {
+          onJoinSuccess?.(joinResponse);
+        }
       },
 
       onJoinError: (error) => {
@@ -30,6 +59,15 @@ export async function createNotesChannel({
         setIsConnected(false);
       },
     });
+
+    // Register event handler for presence_state updates
+    if (channel && onPresenceState) {
+      channel.on<PresenceStatePayload>("presence_state", (payload) => {
+        console.log("Presence state update:", payload);
+        onPresenceState(payload);
+      });
+    }
+
     return channel;
   } catch (err) {
     console.error("Error connecting to notes channel:", err);
