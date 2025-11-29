@@ -58,6 +58,11 @@ config :catatan_backend, CatatanBackend.CassandraClient,
 
 config :catatan_backend, CatatanBackend.Replica, replica_id: "test_replica"
 
+# Encryption configuration for tests
+config :catatan_backend, CatatanBackend.Encryption,
+  # Use a fixed test key (32 bytes) for consistent test results
+  key: Base.decode64!("r+8tknZkMajwEBiuMR6nUXwNAJsEF5qsV8UBYyXU4Q8=")
+
 config :argon2_elixir,
   t_cost: 1,
   m_cost: 8

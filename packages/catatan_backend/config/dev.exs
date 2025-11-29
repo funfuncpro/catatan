@@ -32,6 +32,10 @@ config :catatan_backend,
        :frontend_host,
        System.get_env("FRONTEND_HOST") || "http://localhost:3000"
 
+# Encryption configuration (key loaded from .env)
+config :catatan_backend, CatatanBackend.Encryption,
+  key: System.get_env("ENCRYPTION_KEY")
+
 # For development, read and load environment variables from .env file
 
 # For development, we disable any cache and enable
@@ -89,3 +93,7 @@ config :catatan_backend, CatatanBackend.SQS, url: System.get_env("AWS_SQS_URL")
 
 config :catatan_backend, CatatanBackend.MailerInformation,
   from_email: System.get_env("FROM_EMAIL")
+
+# Encryption configuration
+config :catatan_backend, CatatanBackend.Encryption,
+  key: System.get_env("ENCRYPTION_KEY")

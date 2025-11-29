@@ -4,15 +4,22 @@ defmodule CatatanBackend.Notes.Store do
   """
 
   alias CatatanBackend.CassandraClient
+  alias CatatanBackend.Encryption
   alias CatatanBackend.Notes.{Lww, NoteCrdt}
+
+  require Logger
 
   @doc """
   This is an *upsert* operation: it overwrites existing note content.
+
+  The body content is encrypted before being stored in Cassandra.
+  Encrypted data is base64-encoded for storage in text columns.
   """
   @spec upsert(String.t(), term(), non_neg_integer(), String.t()) ::
           {:ok, NoteCrdt.t()} | {:error, term()}
   def upsert(note_id, replica_id, clock, body) do
-    with {:ok, prepared} <-
+    with {:ok, encrypted_body} <- encrypt_body(body),
+         {:ok, prepared} <-
            CassandraClient.prepare(
              "INSERT INTO notes_lww (note_id, replica_id, clock, body) VALUES (:note_id, :replica_id, :clock, :body)"
            ),
@@ -21,7 +28,7 @@ defmodule CatatanBackend.Notes.Store do
              "note_id" => note_id,
              "replica_id" => to_string(replica_id),
              "clock" => clock,
-             "body" => body
+             "body" => encrypted_body
            }) do
       lww = %Lww{
         content: body,
@@ -37,6 +44,10 @@ defmodule CatatanBackend.Notes.Store do
 
       {:ok, note}
     else
+      {:error, :encryption_failed} = error ->
+        Logger.error("Failed to encrypt note body for note_id=#{note_id}")
+        error
+
       {:error, reason} ->
         {:error, {:cassandra, reason}}
     end
@@ -88,11 +99,51 @@ defmodule CatatanBackend.Notes.Store do
   end
 
   defp row_to_lww(row) do
+    body = row["body"] || ""
+    decrypted_body = decrypt_body(body)
+
     %Lww{
-      content: row["body"] || "",
+      content: decrypted_body,
       clock: row["clock"] || 0,
       replica_id: row["replica_id"] || "",
       last_updated: DateTime.utc_now()
     }
+  end
+
+  # Encryption/Decryption helpers
+
+  @spec encrypt_body(String.t()) :: {:ok, String.t()} | {:error, :encryption_failed}
+  defp encrypt_body(body) when is_binary(body) do
+    case Encryption.encrypt(body) do
+      {:ok, encrypted_binary} ->
+        # Base64 encode for storage in Cassandra text column
+        {:ok, Base.encode64(encrypted_binary)}
+
+      {:error, _reason} ->
+        {:error, :encryption_failed}
+    end
+  end
+
+  @spec decrypt_body(String.t()) :: String.t()
+  defp decrypt_body(encrypted_body) when is_binary(encrypted_body) do
+    # Try to base64 decode and decrypt
+    case Base.decode64(encrypted_body) do
+      {:ok, encrypted_binary} ->
+        case Encryption.decrypt(encrypted_binary) do
+          {:ok, plaintext} ->
+            plaintext
+
+          {:error, reason} ->
+            Logger.warning(
+              "Failed to decrypt body (reason: #{inspect(reason)}), attempting to use as plaintext"
+            )
+
+            encrypted_body
+        end
+
+      :error ->
+        # Not base64, might be plaintext from before encryption (backward compatibility)
+        encrypted_body
+    end
   end
 end

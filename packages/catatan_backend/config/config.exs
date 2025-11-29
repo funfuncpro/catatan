@@ -35,6 +35,12 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Configures encryption for notes
+config :catatan_backend, CatatanBackend.Encryption,
+  enabled: true,
+  algorithm: :aes_256_gcm,
+  aad: "catatan_notes_v1"
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

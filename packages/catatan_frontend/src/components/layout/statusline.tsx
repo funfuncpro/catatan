@@ -1,5 +1,4 @@
 import { useContext, createMemo } from "solid-js";
-import { EditorContext } from "~/context/editor-client";
 import { CursorContext } from "~/context/cursor";
 import { NotesContext } from "~/context/notes";
 import { ConnectionContext } from "~/context/connection";

@@ -1,12 +1,21 @@
 export namespace Actor {
+  export interface Permission {
+    write: boolean;
+  }
+
+  export interface Cursor {
+    x: number;
+    y: number;
+    color?: string;
+  }
+
   export interface Writer {
-    kind: "writer";
     id: string;
     name: string;
-    color: string;
-    cursor: {
-      x: number;
-      y: number;
-    };
+    permission: Permission;
+    cursor: Cursor;
   }
+
+  /** Map of writer ID to Writer */
+  export type WritersMap = Record<string, Writer>;
 }

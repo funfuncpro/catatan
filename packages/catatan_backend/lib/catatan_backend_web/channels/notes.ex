@@ -18,7 +18,7 @@ defmodule CatatanBackendWeb.Channels.Notes do
         |> assign(:writer_id, my_writer.id)
         |> assign(:current_writers, all_writers)
 
-      {:ok, %{writers: all_writers}, socket}
+      {:ok, %{my_writer_id: my_writer.id, writers: all_writers}, socket}
     else
       {:error, errors} ->
         Logger.warning("Failed to join note channel: #{notes_id}, errors: #{inspect(errors)}")

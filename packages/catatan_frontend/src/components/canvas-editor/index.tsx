@@ -29,14 +29,13 @@ export function CanvasEditor() {
   const [state, setState] = createSignal<EditorState>(createState(""));
   const [scrollOffset, setScrollOffset] = createSignal(0);
 
-  // Helper function to update cursor position in context
   const updateCursorPosition = (editorState: EditorState) => {
     if (!cursorContext) return;
 
     const { doc, cursor } = editorState;
-    const line = Doc.posToLine(doc, cursor) + 1; // 1-based line number
-    const lineStart = Doc.lineToPos(doc, line - 1); // 0-based for lineToPos
-    const column = cursor - lineStart + 1; // 1-based column number
+    const line = Doc.posToLine(doc, cursor) + 1;
+    const lineStart = Doc.lineToPos(doc, line - 1);
+    const column = cursor - lineStart + 1;
 
     cursorContext.setLine(line);
     cursorContext.setColumn(column);
@@ -136,7 +135,13 @@ export function CanvasEditor() {
         maxTextWidth,
       };
 
-      render(rc, currentState, layout, cursorVisible);
+      render(
+        rc,
+        currentState,
+        layout,
+        cursorVisible,
+        cursorContext?.remoteCursors(),
+      );
       animationId = requestAnimationFrame(loop);
     };
 
@@ -258,7 +263,6 @@ export function CanvasEditor() {
       const canvasHeight = canvasRef.height / dpr;
       const maxTextWidth = canvasRef.width / dpr - PADDING_X * 2;
 
-      // Use cached layout
       const { layout, cache: newCache } = getLayout(
         layoutCache,
         ctx,
