@@ -10,21 +10,19 @@ import {
 import { buildFont } from "./styles";
 import { getVisibleRange } from "./viewport";
 import { posToVisual } from "./layout";
+import { Actor } from "~/types/actor";
 
-/** Render a visual line */
 export const renderVisualLine = (
   rc: RenderContext,
   state: EditorState,
   vl: VisualLine,
-  y: number, // y is the text baseline position (alphabetic)
+  y: number,
 ): void => {
   const { ctx, isDark } = rc;
 
-  // Get the paragraph node for formatting info
   const root = state.doc.root;
   const node = root.children[vl.logicalLine];
 
-  // Get actual text from document (includes spaces)
   const logicalLine = Doc.getLine(state.doc, vl.logicalLine);
   const vlText = logicalLine.slice(vl.startOffset, vl.endOffset);
 
@@ -37,7 +35,6 @@ export const renderVisualLine = (
         const childStart = charIndex;
         const childEnd = charIndex + child.text.length;
 
-        // Check if this child overlaps with our visual line range
         if (childEnd > vl.startOffset && childStart < vl.endOffset) {
           const sliceStart = Math.max(0, vl.startOffset - childStart);
           const sliceEnd = Math.min(
@@ -55,7 +52,6 @@ export const renderVisualLine = (
 
             ctx.font = buildFont(style);
 
-            // Code background (y is baseline, so go up by ~80% of font size for top)
             if (style.code) {
               const textWidth = ctx.measureText(text).width;
               ctx.fillStyle = isDark ? "#374151" : "#e5e7eb";
@@ -102,7 +98,6 @@ export const renderVisualLine = (
   }
 };
 
-/** Render cursor */
 export const renderCursor = (
   rc: RenderContext,
   state: EditorState,
@@ -120,14 +115,12 @@ export const renderCursor = (
 
   ctx.font = `${FONT_SIZE}px ${FONT_FAMILY}`;
 
-  // Get the actual text from logical line for accurate cursor positioning
   const logicalLine = Doc.getLine(state.doc, vl.logicalLine);
   const textBefore = logicalLine.slice(
     vl.startOffset,
     vl.startOffset + visualOffset,
   );
 
-  // Round to avoid subpixel rendering issues on Safari
   const cursorX = Math.round(PADDING_X + ctx.measureText(textBefore).width);
   const cursorY = Math.round(
     PADDING_Y + visualLine * LINE_HEIGHT - scrollOffset,
@@ -139,7 +132,53 @@ export const renderCursor = (
   }
 };
 
-/** Render selection */
+export const renderRemoteCursor = (
+  rc: RenderContext,
+  doc: Doc.Document,
+  layout: Layout,
+  cursor: Actor.Cursor,
+): void => {
+  const { ctx, height, scrollOffset, isDark } = rc;
+
+  // Convert line/column (1-based) to document position
+  // cursor.x = column, cursor.y = line (as sent by cursor_move event)
+  const line = cursor.y - 1; // Convert to 0-based
+  const column = cursor.x - 1; // Convert to 0-based
+
+  // Validate line is within bounds
+  const lineCount = Doc.lineCount(doc);
+  if (line < 0 || line >= lineCount) return;
+
+  // Get position at start of line, then add column offset
+  const lineStart = Doc.lineToPos(doc, line);
+  const lineText = Doc.getLine(doc, line);
+  const clampedColumn = Math.min(column, lineText.length);
+  const pos = lineStart + clampedColumn;
+
+  const { visualLine, visualOffset } = posToVisual(layout, doc, pos);
+  const vl = layout.lines[visualLine];
+  if (!vl) return;
+
+  ctx.font = `${FONT_SIZE}px ${FONT_FAMILY}`;
+
+  const logicalLine = Doc.getLine(doc, vl.logicalLine);
+  const textBefore = logicalLine.slice(
+    vl.startOffset,
+    vl.startOffset + visualOffset,
+  );
+
+  const cursorX = Math.round(PADDING_X + ctx.measureText(textBefore).width);
+  const cursorY = Math.round(
+    PADDING_Y + visualLine * LINE_HEIGHT - scrollOffset,
+  );
+
+  if (cursorY >= -LINE_HEIGHT && cursorY < height + LINE_HEIGHT) {
+    // Color already includes opacity from generateColorFromId
+    ctx.fillStyle = cursor.color ?? (isDark ? "#FFFFFF4D" : "#0000004D");
+    ctx.fillRect(cursorX, cursorY + 2, 2, LINE_HEIGHT - 4);
+  }
+};
+
 export const renderSelection = (
   rc: RenderContext,
   state: EditorState,
@@ -162,7 +201,6 @@ export const renderSelection = (
     const vl = layout.lines[i];
     if (!vl) continue;
 
-    // Get actual text from logical line
     const logicalLine = Doc.getLine(state.doc, vl.logicalLine);
     const vlText = logicalLine.slice(vl.startOffset, vl.endOffset);
 
@@ -184,40 +222,41 @@ export const renderSelection = (
   }
 };
 
-/** Main render function */
 export const render = (
   rc: RenderContext,
   state: EditorState,
   layout: Layout,
   cursorVisible: boolean,
+  remoteCursors?: Record<string, Actor.Cursor>,
 ): void => {
   const { ctx, width, height, scrollOffset, isDark } = rc;
 
-  // Clear with background color (better than clearRect for Safari)
   ctx.fillStyle = isDark ? "#1a1a1a" : "#ffffff";
   ctx.fillRect(0, 0, width, height);
 
-  // Set text rendering properties
   ctx.textBaseline = "alphabetic";
 
   const { start, end } = getVisibleRange(rc, layout.totalLines);
 
-  // Render visible lines
   for (let i = start; i < end; i++) {
     const vl = layout.lines[i];
     if (!vl) continue;
 
-    // Use alphabetic baseline, so add font size to y position
     const y = PADDING_Y + i * LINE_HEIGHT - scrollOffset + FONT_SIZE;
     renderVisualLine(rc, state, vl, y);
   }
 
-  // Render selection (behind cursor)
   if (state.anchor !== null && state.anchor !== state.cursor) {
     renderSelection(rc, state, layout);
   }
 
-  // Render cursor
+  // Render remote cursors (always visible, no blinking)
+  if (remoteCursors) {
+    for (const cursor of Object.values(remoteCursors)) {
+      renderRemoteCursor(rc, state.doc, layout, cursor);
+    }
+  }
+
   if (cursorVisible) {
     renderCursor(rc, state, layout);
   }

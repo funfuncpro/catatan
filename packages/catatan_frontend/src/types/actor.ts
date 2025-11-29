@@ -6,6 +6,7 @@ export namespace Actor {
   export interface Cursor {
     x: number;
     y: number;
+    color?: string;
   }
 
   export interface Writer {

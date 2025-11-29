@@ -135,7 +135,13 @@ export function CanvasEditor() {
         maxTextWidth,
       };
 
-      render(rc, currentState, layout, cursorVisible);
+      render(
+        rc,
+        currentState,
+        layout,
+        cursorVisible,
+        cursorContext?.remoteCursors(),
+      );
       animationId = requestAnimationFrame(loop);
     };
 

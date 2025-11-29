@@ -17,6 +17,8 @@ import {
 import { PhoenixChannel } from "~/lib/websocket";
 import { CursorContext } from "./cursor";
 import { WriterContext } from "./writer";
+import { generateColorFromId } from "~/lib/cursor";
+import { Actor } from "~/types/actor";
 
 export interface ConnectionContextValue {
   isConnected: Accessor<boolean>;
@@ -62,10 +64,13 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       }
 
       if (cursorContext) {
-        const remoteCursors: Record<string, { x: number; y: number }> = {};
+        const remoteCursors: Record<string, Actor.Cursor> = {};
         for (const [id, writer] of Object.entries(writers)) {
           if (id !== my_writer_id) {
-            remoteCursors[id] = writer.cursor;
+            remoteCursors[id] = {
+              ...writer.cursor,
+              color: generateColorFromId(id),
+            };
           }
         }
         cursorContext.setRemoteCursors(remoteCursors);
@@ -85,10 +90,13 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       }
 
       if (cursorContext) {
-        const remoteCursors: Record<string, { x: number; y: number }> = {};
+        const remoteCursors: Record<string, Actor.Cursor> = {};
         for (const [id, writer] of Object.entries(writers)) {
           if (id !== currentWriterId) {
-            remoteCursors[id] = writer.cursor;
+            remoteCursors[id] = {
+              ...writer.cursor,
+              color: generateColorFromId(id),
+            };
           }
         }
         cursorContext.setRemoteCursors(remoteCursors);

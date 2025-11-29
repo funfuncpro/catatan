@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/solid-router";
 import { CanvasEditor } from "~/components/canvas-editor/index";
-import { Header } from "~/components/layout/header-new";
+import { Header } from "~/components/layout/header";
 import StatusLine from "~/components/layout/statusline";
 import { ConnectionContextProvider } from "~/context/connection";
 import { CursorContextProvider } from "~/context/cursor";
