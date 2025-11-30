@@ -346,13 +346,93 @@ const isPrintableKey = (e: KeyboardEvent): boolean =>
   e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey;
 
 /**
+ * Result of handling a key event
+ */
+export interface KeyEventResult {
+  state: EditorState;
+  handled: boolean;
+  deleteRange?: { start: number; count: number };
+}
+
+/**
+ * Calculate the delete range for a given key event before state changes
+ * This is critical for CRDT sync - we need to know which elements to delete
+ * before the operation modifies the state
+ */
+const calculateDeleteRange = (
+  e: KeyboardEvent,
+  state: EditorState,
+): { start: number; count: number } | undefined => {
+  const isBackspace = e.key === "Backspace";
+  const isDelete = e.key === "Delete";
+  const hasSelection = state.anchor !== null && state.anchor !== state.cursor;
+
+  // Selection delete/replace takes priority
+  if (hasSelection && (isBackspace || isDelete)) {
+    const selStart = Math.min(state.cursor, state.anchor!);
+    const selEnd = Math.max(state.cursor, state.anchor!);
+    return { start: selStart, count: selEnd - selStart };
+  }
+
+  const text = Doc.getText(state.doc);
+
+  if (isBackspace) {
+    if (e.metaKey || (e.ctrlKey && e.shiftKey)) {
+      // Delete entire line (Cmd+Backspace or Ctrl+Shift+Backspace)
+      const line = Doc.posToLine(state.doc, state.cursor);
+      const { start, end } = Doc.lineRange(state.doc, line);
+      const lineCount = Doc.lineCount(state.doc);
+
+      // Match deleteLine operation logic
+      if (lineCount === 1) {
+        return { start, count: end - start };
+      } else if (line === lineCount - 1) {
+        // Last line: delete including preceding newline
+        const deleteStart = start - 1;
+        return { start: deleteStart, count: end - deleteStart };
+      } else {
+        // Delete including trailing newline
+        return { start, count: end - start + 1 };
+      }
+    } else if (e.altKey) {
+      // Delete word backward (Alt+Backspace)
+      const wordStart = findWordBoundary(text, state.cursor, "left");
+      const count = state.cursor - wordStart;
+      if (count > 0) {
+        return { start: wordStart, count };
+      }
+    } else if (state.cursor > 0) {
+      // Single character backspace
+      return { start: state.cursor - 1, count: 1 };
+    }
+  } else if (isDelete) {
+    if (e.altKey) {
+      // Delete word forward (Alt+Delete)
+      const wordEnd = findWordBoundary(text, state.cursor, "right");
+      const count = wordEnd - state.cursor;
+      if (count > 0) {
+        return { start: state.cursor, count };
+      }
+    } else if (state.cursor < text.length) {
+      // Single character delete
+      return { start: state.cursor, count: 1 };
+    }
+  }
+
+  return undefined;
+};
+
+/**
  * Handle keyboard events and return new state
  */
 export const handleKeyEvent = (
   e: KeyboardEvent,
   state: EditorState,
-): { state: EditorState; handled: boolean } => {
+): KeyEventResult => {
   const bindings = createBindings();
+
+  // Calculate delete range BEFORE state changes (for CRDT sync)
+  const deleteRange = calculateDeleteRange(e, state);
 
   // Check key bindings first
   for (const binding of bindings) {
@@ -360,7 +440,7 @@ export const handleKeyEvent = (
       if (binding.preventDefault) {
         e.preventDefault();
       }
-      return { state: binding.operation(state), handled: true };
+      return { state: binding.operation(state), handled: true, deleteRange };
     }
   }
 

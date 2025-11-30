@@ -258,43 +258,12 @@ export function CanvasEditor(props: { initialContent?: string }) {
       const currentState = state();
       const oldLength = Doc.length(currentState.doc);
 
-      // Pre-calculate delete targets BEFORE the state changes
-      // This is critical for proper CRDT sync
-      let deleteElementIds: string[] = [];
-      if (editorSyncContext) {
-        // Check if this might be a delete operation (backspace, delete key, or selection replacement)
-        const isBackspace = e.key === "Backspace";
-        const isDelete = e.key === "Delete";
-        const hasSelection =
-          currentState.anchor !== null &&
-          currentState.anchor !== currentState.cursor;
-
-        if (isBackspace && !hasSelection) {
-          // Single character backspace - delete char before cursor
-          if (currentState.cursor > 0) {
-            deleteElementIds = editorSyncContext.getDeleteTargetRange(
-              currentState.cursor - 1,
-              1,
-            );
-          }
-        } else if (isDelete && !hasSelection) {
-          // Single character delete - delete char at cursor
-          deleteElementIds = editorSyncContext.getDeleteTargetRange(
-            currentState.cursor,
-            1,
-          );
-        } else if (hasSelection) {
-          // Selection delete/replace
-          const selStart = Math.min(currentState.cursor, currentState.anchor!);
-          const selEnd = Math.max(currentState.cursor, currentState.anchor!);
-          deleteElementIds = editorSyncContext.getDeleteTargetRange(
-            selStart,
-            selEnd - selStart,
-          );
-        }
-      }
-
-      const { state: newState, handled } = handleKeyEvent(e, currentState);
+      // handleKeyEvent now returns deleteRange metadata for CRDT sync
+      const {
+        state: newState,
+        handled,
+        deleteRange,
+      } = handleKeyEvent(e, currentState);
 
       if (handled) {
         const newLength = Doc.length(newState.doc);
@@ -309,6 +278,14 @@ export function CanvasEditor(props: { initialContent?: string }) {
           );
           applyAndSync(currentState, newState, "insert", insertedText);
         } else if (newLength < oldLength) {
+          // Use deleteRange from handleKeyEvent to get element IDs for CRDT sync
+          let deleteElementIds: string[] = [];
+          if (deleteRange && editorSyncContext) {
+            deleteElementIds = editorSyncContext.getDeleteTargetRange(
+              deleteRange.start,
+              deleteRange.count,
+            );
+          }
           applyAndSync(
             currentState,
             newState,
