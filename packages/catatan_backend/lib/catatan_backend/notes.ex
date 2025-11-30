@@ -2,40 +2,42 @@ defmodule CatatanBackend.Notes do
   @moduledoc """
   Public API for managing notes in the CatatanBackend application.
 
-  This module uses a unified CRDT-based architecture where all notes are stored
-  in the notes_lww table with Last-Write-Wins conflict resolution.
+  This module uses YATA CRDT for collaborative text editing with
+  character-level conflict resolution.
   """
 
   alias CatatanBackend.GenerateID
-  alias CatatanBackend.Notes.{Store, NoteCrdt}
-  alias CatatanBackend.Server.Notes, as: NoteServer
+  alias CatatanBackend.Notes.Store
+  alias CatatanBackend.Notes.Crdt.Yata
+  alias CatatanBackend.Server.NotesNew
 
   # --- Storage Operations ---
 
   @doc """
-  Creates a new note with the given initial content.
+  Creates a new note.
 
-  Generates a unique nano ID and creates the first replica with clock=1.
+  Generates a unique nano ID and creates the note metadata.
+  The note starts empty - content is added via YATA operations.
 
   ## Examples
 
-      iex> create_note("My note content")
-      {:ok, %{note_id: "abc123", content: "My note content", clock: 1}}
-  """
-  @spec create_note(String.t()) :: {:ok, map()} | {:error, term()}
-  def create_note(content) do
-    note_id = generate_note_id()
-    replica_id = get_replica_id()
-    initial_clock = 1
+      iex> create_note()
+      {:ok, %{"note_id" => "abc123", "owner_id" => nil, "created_at" => ~U[...]}}
 
-    case Store.upsert(note_id, replica_id, initial_clock, content) do
-      {:ok, _note} ->
+      iex> create_note("user123")
+      {:ok, %{"note_id" => "abc123", "owner_id" => "user123", "created_at" => ~U[...]}}
+  """
+  @spec create_note(String.t() | nil) :: {:ok, map()} | {:error, term()}
+  def create_note(owner_id \\ nil) do
+    note_id = generate_note_id()
+
+    case Store.create(note_id, owner_id) do
+      {:ok, metadata} ->
         {:ok,
          %{
-           "note_id" => note_id,
-           "content" => content,
-           "clock" => initial_clock,
-           "replica_id" => replica_id
+           "note_id" => metadata["id"],
+           "owner_id" => metadata["owner_id"],
+           "created_at" => metadata["created_at"]
          }}
 
       {:error, reason} ->
@@ -44,84 +46,50 @@ defmodule CatatanBackend.Notes do
   end
 
   @doc """
-  Retrieves a note by its ID, merging all replicas.
+  Retrieves a note by its ID.
 
-  Returns the merged content from all replicas using LWW semantics.
+  Returns the note metadata and current content reconstructed from YATA elements.
   """
   @spec get_note_by_id(String.t()) :: {:ok, map()} | {:error, :not_found | term()}
   def get_note_by_id(note_id) do
-    case Store.get(note_id) do
-      {:ok, note_crdt} ->
-        {:ok,
-         %{
-           "note_id" => note_crdt.note_id,
-           "content" => NoteCrdt.get_body(note_crdt),
-           "clock" => NoteCrdt.current_clock(note_crdt)
-         }}
+    writer_id = get_replica_id()
 
-      {:error, reason} ->
-        {:error, reason}
+    with {:ok, metadata} <- Store.get_metadata(note_id),
+         {:ok, yata} <- Store.get(note_id, writer_id) do
+      {:ok,
+       %{
+         "note_id" => metadata["id"],
+         "owner_id" => metadata["owner_id"],
+         "created_at" => metadata["created_at"],
+         "content" => Yata.to_text(yata)
+       }}
     end
   end
 
-  # --- Live/Realtime Operations (CRDT-based) ---
+  @doc """
+  Checks if a note exists.
+  """
+  @spec note_exists?(String.t()) :: boolean()
+  def note_exists?(note_id) do
+    Store.exists?(note_id)
+  end
+
+  # --- Live/Realtime Operations (YATA CRDT-based) ---
 
   @doc """
-  Opens a note for realtime editing and returns the current body.
-
-  This ensures the NoteServer GenServer is started for the given note
-  and retrieves the current markdown body from memory. This is the entry
-  point for collaborative editing sessions.
-
-  ## Examples
-
-      iex> open_note_live("note123")
-      {:ok, "Current note content"}
+  Returns the full YATA state for a note.
   """
-  @spec open_note_live(String.t()) :: {:ok, String.t()}
-  def open_note_live(note_id) do
-    note_id
-    |> ensure_note_started()
-    |> read_note_body()
+  @spec get_state(String.t()) :: {:ok, Yata.t()}
+  def get_state(note_id) do
+    NotesNew.get_state(note_id)
   end
 
   @doc """
-  Updates a note's content through the realtime CRDT path.
-
-  This broadcasts changes to all connected clients and persists
-  asynchronously to Cassandra. Use this for collaborative editing.
-
-  ## Examples
-
-      iex> update_note_live("note123", "Updated content")
-      :ok
+  Returns the document text content.
   """
-  @spec update_note_live(String.t(), String.t()) :: :ok
-  def update_note_live(note_id, markdown) do
-    NoteServer.set_body(note_id, markdown)
-  end
-
-  @doc """
-  Reads the current live content from memory (GenServer state).
-
-  This bypasses storage and reads directly from the CRDT state.
-  """
-  @spec get_live_body(String.t()) :: String.t()
-  def get_live_body(note_id) do
-    NoteServer.read_body(note_id)
-  end
-
-  @spec ensure_note_started(String.t()) :: String.t()
-  defp ensure_note_started(note_id) do
-    :ok = NoteServer.ensure_started(note_id)
-    note_id
-  end
-
-  @spec read_note_body(String.t()) :: {:ok, String.t()}
-  defp read_note_body(note_id) do
-    note_id
-    |> NoteServer.read_body()
-    |> then(&{:ok, &1})
+  @spec get_text(String.t()) :: {:ok, String.t()}
+  def get_text(note_id) do
+    NotesNew.get_text(note_id)
   end
 
   @spec generate_note_id() :: String.t()

@@ -1,5 +1,6 @@
 import { Notes } from "~/types/note";
 import { Actor } from "~/types/actor";
+import { CRDT } from "~/lib/crdt";
 import { websocketConnectFn, PhoenixChannel } from "./websocket";
 
 /** Response received when joining the notes channel */
@@ -14,11 +15,24 @@ export interface PresenceStatePayload {
   writers: Actor.WritersMap;
 }
 
+/** Remote insert event payload from server */
+export interface RemoteInsertPayload {
+  element: CRDT.SerializedElement;
+}
+
+/** Remote delete event payload from server */
+export interface RemoteDeletePayload {
+  element_id: string;
+  deleted_at: string;
+}
+
 /** Callbacks for notes channel events */
 export interface NotesChannelCallbacks {
   setIsConnected: (connected: boolean) => void;
   onJoinSuccess?: (response: JoinResponse) => void;
   onPresenceState?: (payload: PresenceStatePayload) => void;
+  onRemoteInsert?: (payload: RemoteInsertPayload) => void;
+  onRemoteDelete?: (payload: RemoteDeletePayload) => void;
 }
 
 export async function createNotesChannel({
@@ -26,6 +40,8 @@ export async function createNotesChannel({
   setIsConnected,
   onJoinSuccess,
   onPresenceState,
+  onRemoteInsert,
+  onRemoteDelete,
 }: NotesChannelCallbacks & { noteID: string }): Promise<
   PhoenixChannel | undefined
 > {
@@ -60,12 +76,31 @@ export async function createNotesChannel({
       },
     });
 
-    // Register event handler for presence_state updates
-    if (channel && onPresenceState) {
-      channel.on<PresenceStatePayload>("presence_state", (payload) => {
-        console.log("Presence state update:", payload);
-        onPresenceState(payload);
-      });
+    // Register event handlers
+    if (channel) {
+      // Presence state updates
+      if (onPresenceState) {
+        channel.on<PresenceStatePayload>("presence_state", (payload) => {
+          console.log("Presence state update:", payload);
+          onPresenceState(payload);
+        });
+      }
+
+      // Remote insert events (when another client inserts)
+      if (onRemoteInsert) {
+        channel.on<RemoteInsertPayload>("remote_insert", (payload) => {
+          console.log("Remote insert:", payload);
+          onRemoteInsert(payload);
+        });
+      }
+
+      // Remote delete events (when another client deletes)
+      if (onRemoteDelete) {
+        channel.on<RemoteDeletePayload>("remote_delete", (payload) => {
+          console.log("Remote delete:", payload);
+          onRemoteDelete(payload);
+        });
+      }
     }
 
     return channel;

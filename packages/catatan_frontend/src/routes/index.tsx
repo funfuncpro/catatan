@@ -5,13 +5,16 @@ import StatusLine from "~/components/layout/statusline";
 import { ConnectionContextProvider } from "~/context/connection";
 import { CursorContextProvider } from "~/context/cursor";
 import { getEditorSessionFn } from "~/context/editor";
+import { EditorSyncContextProvider } from "~/context/editor-sync";
 import { NotesContextProvider } from "~/context/notes";
 import { WriterContextProvider } from "~/context/writer";
+import { YataContextProvider } from "~/context/yata";
 
 export const Route = createFileRoute("/")({
   component: Index,
   loader: async () => {
     const noteData = await getEditorSessionFn();
+    console.log(noteData);
     return { noteData };
   },
 });
@@ -22,17 +25,23 @@ function Index() {
   return (
     <div class="flex flex-col relative w-full text-base ">
       <NotesContextProvider noteID={loaderData().noteData?.noteId}>
-        <CursorContextProvider>
-          <WriterContextProvider>
-            <ConnectionContextProvider>
-              <Header />
-              <div class="relative w-full my-16">
-                <CanvasEditor />
-                <StatusLine />
-              </div>
-            </ConnectionContextProvider>
-          </WriterContextProvider>
-        </CursorContextProvider>
+        <YataContextProvider>
+          <CursorContextProvider>
+            <EditorSyncContextProvider>
+              <WriterContextProvider>
+                <ConnectionContextProvider>
+                  <Header />
+                  <div class="relative w-full my-16">
+                    <CanvasEditor
+                      initialContent={loaderData().noteData?.content ?? ""}
+                    />
+                    <StatusLine />
+                  </div>
+                </ConnectionContextProvider>
+              </WriterContextProvider>
+            </EditorSyncContextProvider>
+          </CursorContextProvider>
+        </YataContextProvider>
       </NotesContextProvider>
     </div>
   );

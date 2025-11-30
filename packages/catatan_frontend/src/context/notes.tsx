@@ -1,3 +1,4 @@
+import { useServerFn } from "@tanstack/solid-start";
 import {
   Accessor,
   createContext,
@@ -7,6 +8,7 @@ import {
   Setter,
 } from "solid-js";
 import { createNewNote } from "~/lib/notes";
+import { updateEditorSessionFn } from "./editor";
 
 export interface NotesContextValue {
   notesID: Accessor<string | null>;
@@ -20,6 +22,7 @@ export function NotesContextProvider(props: {
   noteID: string | null;
 }) {
   const [notesID, setNotesID] = createSignal<string | null>(props.noteID);
+  const updateEditorSession = useServerFn(updateEditorSessionFn);
 
   const ctxValue: NotesContextValue = {
     notesID,
@@ -30,6 +33,11 @@ export function NotesContextProvider(props: {
     if (!props.noteID) {
       let { error, data } = await createNewNote();
       if (!error && data) {
+        await updateEditorSession({
+          data: {
+            noteId: data.note_id,
+          },
+        });
         setNotesID(data.note_id);
       }
     }

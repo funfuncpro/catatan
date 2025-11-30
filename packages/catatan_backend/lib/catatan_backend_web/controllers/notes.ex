@@ -2,7 +2,6 @@ defmodule CatatanBackendWeb.NotesController do
   use CatatanBackendWeb, :controller
   alias CatatanBackendWeb.NotesValidator
   alias CatatanBackendWeb.Response
-  alias CatatanBackendWeb.CookieSessionHelper
   alias CatatanBackend.Notes
 
   action_fallback CatatanBackendWeb.FallbackController
@@ -14,33 +13,19 @@ defmodule CatatanBackendWeb.NotesController do
   """
 
   def create(conn, params) do
-    case NotesValidator.validate_notes_creation(params) do
-      {:ok, validated_data} ->
-        case Notes.create_note(Map.get(validated_data, :content, "")) do
-          {:ok, note} ->
-            case CatatanBackend.Sessions.create_session(note["note_id"]) do
-              {:ok, session} ->
-                conn
-                |> CookieSessionHelper.add_and_activate_session(session["session_id"])
-                |> put_status(:created)
-                |> Response.success_response("Note created successfully", note)
+    {:ok, _validated_data} = NotesValidator.validate_notes_creation(params)
 
-              {:error, _reason} ->
-                conn
-                |> put_status(:internal_server_error)
-                |> Response.error_response("Failed to create session", %{})
-            end
-
-          {:error, _reason} ->
-            conn
-            |> put_status(:internal_server_error)
-            |> Response.error_response("Failed to create note", %{})
-        end
-
-      {:error, errors} ->
+    # owner_id is nil for now (anonymous notes)
+    case Notes.create_note(nil) do
+      {:ok, note} ->
         conn
-        |> put_status(:bad_request)
-        |> Response.error_response("Bad Request", errors)
+        |> put_status(:created)
+        |> Response.success_response("Note created successfully", note)
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> Response.error_response("Failed to create note", %{})
     end
   end
 

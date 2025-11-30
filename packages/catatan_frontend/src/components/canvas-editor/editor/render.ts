@@ -132,28 +132,21 @@ export const renderCursor = (
   }
 };
 
+export type ElementToPositionFn = (
+  afterElement: Actor.ElementId,
+  offset: number,
+) => number;
+
 export const renderRemoteCursor = (
   rc: RenderContext,
   doc: Doc.Document,
   layout: Layout,
   cursor: Actor.Cursor,
+  elementToPosition: ElementToPositionFn,
 ): void => {
   const { ctx, height, scrollOffset, isDark } = rc;
 
-  // Convert line/column (1-based) to document position
-  // cursor.x = column, cursor.y = line (as sent by cursor_move event)
-  const line = cursor.y - 1; // Convert to 0-based
-  const column = cursor.x - 1; // Convert to 0-based
-
-  // Validate line is within bounds
-  const lineCount = Doc.lineCount(doc);
-  if (line < 0 || line >= lineCount) return;
-
-  // Get position at start of line, then add column offset
-  const lineStart = Doc.lineToPos(doc, line);
-  const lineText = Doc.getLine(doc, line);
-  const clampedColumn = Math.min(column, lineText.length);
-  const pos = lineStart + clampedColumn;
+  const pos = elementToPosition(cursor.after_element, cursor.offset);
 
   const { visualLine, visualOffset } = posToVisual(layout, doc, pos);
   const vl = layout.lines[visualLine];
@@ -173,7 +166,6 @@ export const renderRemoteCursor = (
   );
 
   if (cursorY >= -LINE_HEIGHT && cursorY < height + LINE_HEIGHT) {
-    // Color already includes opacity from generateColorFromId
     ctx.fillStyle = cursor.color ?? (isDark ? "#FFFFFF4D" : "#0000004D");
     ctx.fillRect(cursorX, cursorY + 2, 2, LINE_HEIGHT - 4);
   }
@@ -228,6 +220,7 @@ export const render = (
   layout: Layout,
   cursorVisible: boolean,
   remoteCursors?: Record<string, Actor.Cursor>,
+  elementToPosition?: ElementToPositionFn,
 ): void => {
   const { ctx, width, height, scrollOffset, isDark } = rc;
 
@@ -250,10 +243,9 @@ export const render = (
     renderSelection(rc, state, layout);
   }
 
-  // Render remote cursors (always visible, no blinking)
-  if (remoteCursors) {
+  if (remoteCursors && elementToPosition) {
     for (const cursor of Object.values(remoteCursors)) {
-      renderRemoteCursor(rc, state.doc, layout, cursor);
+      renderRemoteCursor(rc, state.doc, layout, cursor, elementToPosition);
     }
   }
 

@@ -34,63 +34,80 @@ defmodule CatatanBackendWeb.Channels.Notes do
   end
 
   @impl true
-  def handle_in("cursor_move", %{"x" => x, "y" => y}, socket) do
-    writer_id = socket.assigns.writer_id
-    notes_id = socket.assigns.notes_id
-    NotesSession.update_cursor(notes_id, writer_id, x, y)
-    {:noreply, socket}
-  end
+  def handle_in("cursor_move", payload, socket) do
+    case NotesValidator.validate_cursor_move(payload) do
+      {:ok, %{after_element: after_element, offset: offset}} ->
+        writer_id = socket.assigns.writer_id
+        notes_id = socket.assigns.notes_id
+        NotesSession.update_cursor(notes_id, writer_id, after_element, offset)
+        {:noreply, socket}
 
-  @impl true
-  def handle_in(
-        "insert",
-        %{"origin" => origin, "right_origin" => right_origin, "content" => content},
-        socket
-      ) do
-    writer_id = socket.assigns.writer_id
-    notes_id = socket.assigns.notes_id
-
-    parsed_origin = parse_element_id(origin)
-    parsed_right_origin = parse_element_id(right_origin)
-
-    case NotesNew.insert(notes_id, parsed_origin, parsed_right_origin, content, writer_id) do
-      {:ok, element} ->
-        {:reply, {:ok, %{element: serialize_element(element)}}, socket}
-
-      {:error, reason} ->
-        Logger.error("Insert failed: #{inspect(reason)}")
-        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+      {:error, errors} ->
+        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
     end
   end
 
   @impl true
-  def handle_in("delete", %{"element_id" => element_id}, socket) do
-    notes_id = socket.assigns.notes_id
+  def handle_in("insert", payload, socket) do
+    case NotesValidator.validate_insert(payload) do
+      {:ok, %{content: content, origin: origin, right_origin: right_origin}} ->
+        writer_id = socket.assigns.writer_id
+        notes_id = socket.assigns.notes_id
 
-    case NotesNew.delete(notes_id, element_id) do
-      {:ok, _element} ->
-        {:reply, :ok, socket}
+        case NotesNew.insert(notes_id, origin, right_origin, content, writer_id) do
+          {:ok, element} ->
+            {:reply, {:ok, %{element: serialize_element(element)}}, socket}
 
-      {:error, :not_found} ->
-        {:reply, {:error, %{reason: "not_found"}}, socket}
+          {:error, reason} ->
+            Logger.error("Insert failed: #{inspect(reason)}")
+            {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        end
 
-      {:error, reason} ->
-        Logger.error("Delete failed: #{inspect(reason)}")
-        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+      {:error, errors} ->
+        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
     end
   end
 
   @impl true
-  def handle_in("sync", %{"state_vector" => client_sv}, socket) do
-    notes_id = socket.assigns.notes_id
+  def handle_in("delete", payload, socket) do
+    case NotesValidator.validate_delete(payload) do
+      {:ok, %{element_id: element_id}} ->
+        notes_id = socket.assigns.notes_id
 
-    case NotesNew.get_delta(notes_id, client_sv) do
-      {:ok, elements} ->
-        {:reply, {:ok, %{elements: Enum.map(elements, &serialize_element/1)}}, socket}
+        case NotesNew.delete(notes_id, element_id) do
+          {:ok, _element} ->
+            {:reply, :ok, socket}
 
-      {:error, reason} ->
-        Logger.error("Sync failed: #{inspect(reason)}")
-        {:reply, {:error, %{reason: inspect(reason)}}, socket}
+          {:error, :not_found} ->
+            {:reply, {:error, %{reason: "not_found"}}, socket}
+
+          {:error, reason} ->
+            Logger.error("Delete failed: #{inspect(reason)}")
+            {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        end
+
+      {:error, errors} ->
+        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("sync", payload, socket) do
+    case NotesValidator.validate_sync(payload) do
+      {:ok, %{state_vector: client_sv}} ->
+        notes_id = socket.assigns.notes_id
+
+        case NotesNew.get_delta(notes_id, client_sv) do
+          {:ok, elements} ->
+            {:reply, {:ok, %{elements: Enum.map(elements, &serialize_element/1)}}, socket}
+
+          {:error, reason} ->
+            Logger.error("Sync failed: #{inspect(reason)}")
+            {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        end
+
+      {:error, errors} ->
+        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
     end
   end
 
@@ -179,14 +196,6 @@ defmodule CatatanBackendWeb.Channels.Notes do
         error
     end
   end
-
-  defp parse_element_id(nil), do: nil
-
-  defp parse_element_id([writer_id, clock]) when is_binary(writer_id) and is_integer(clock) do
-    {writer_id, clock}
-  end
-
-  defp parse_element_id(_), do: nil
 
   defp serialize_element(%Element{} = el) do
     %{

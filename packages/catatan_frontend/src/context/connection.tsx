@@ -13,10 +13,14 @@ import {
   createNotesChannel,
   JoinResponse,
   PresenceStatePayload,
+  RemoteInsertPayload,
+  RemoteDeletePayload,
 } from "~/lib/notes";
 import { PhoenixChannel } from "~/lib/websocket";
 import { CursorContext } from "./cursor";
 import { WriterContext } from "./writer";
+import { YataContext } from "./yata";
+import { EditorSyncContext } from "./editor-sync";
 import { generateColorFromId } from "~/lib/cursor";
 import { Actor } from "~/types/actor";
 
@@ -37,6 +41,8 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
   const notesContext = useContext(NotesContext);
   const cursorContext = useContext(CursorContext);
   const writerContext = useContext(WriterContext);
+  const yataContext = useContext(YataContext);
+  const editorSyncContext = useContext(EditorSyncContext);
 
   const contextValue: ConnectionContextValue = {
     isConnected,
@@ -59,6 +65,10 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       const { my_writer_id, writers } = response;
       setActiveWriterId(my_writer_id);
 
+      if (yataContext) {
+        yataContext.initializeDocument(noteID, my_writer_id);
+      }
+
       if (writerContext) {
         writerContext.initializeFromJoinResponse(my_writer_id, writers);
       }
@@ -68,7 +78,8 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
         for (const [id, writer] of Object.entries(writers)) {
           if (id !== my_writer_id) {
             remoteCursors[id] = {
-              ...writer.cursor,
+              after_element: writer.cursor.after_element,
+              offset: writer.cursor.offset,
               color: generateColorFromId(id),
             };
           }
@@ -94,12 +105,57 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
         for (const [id, writer] of Object.entries(writers)) {
           if (id !== currentWriterId) {
             remoteCursors[id] = {
-              ...writer.cursor,
+              after_element: writer.cursor.after_element,
+              offset: writer.cursor.offset,
               color: generateColorFromId(id),
             };
           }
         }
         cursorContext.setRemoteCursors(remoteCursors);
+      }
+    };
+
+    const handleRemoteInsert = (payload: RemoteInsertPayload) => {
+      if (!yataContext) return;
+      const textBefore = yataContext.getText();
+      yataContext.integrateRemoteElement(payload.element);
+      const textAfter = yataContext.getText();
+      const elementId = payload.element.id;
+      const pos = yataContext.elementToPosition(elementId, 0);
+
+      if (editorSyncContext && textAfter.length > textBefore.length) {
+        editorSyncContext.pushRemoteOp({
+          type: "insert",
+          pos,
+          content: payload.element.content,
+        });
+      }
+    };
+
+    const handleRemoteDelete = (payload: RemoteDeletePayload) => {
+      if (!yataContext) return;
+
+      const elementIdParts = payload.element_id.split(":");
+      if (elementIdParts.length !== 2) {
+        console.warn("Invalid element_id format:", payload.element_id);
+        return;
+      }
+
+      const elementId: [string, number] = [
+        elementIdParts[0],
+        parseInt(elementIdParts[1], 10),
+      ];
+
+      const pos = yataContext.elementToPosition(elementId, 0);
+
+      yataContext.markRemoteDeleted(payload.element_id, payload.deleted_at);
+
+      if (editorSyncContext && pos >= 0) {
+        editorSyncContext.pushRemoteOp({
+          type: "delete",
+          pos,
+          count: 1,
+        });
       }
     };
 
@@ -110,11 +166,21 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       },
       onJoinSuccess: handleJoinSuccess,
       onPresenceState: handlePresenceState,
+      onRemoteInsert: handleRemoteInsert,
+      onRemoteDelete: handleRemoteDelete,
     })
       .then((ch) => {
         if (ch) {
           channelInstance = ch;
           setChannel(ch);
+
+          if (yataContext) {
+            yataContext.setChannel(ch);
+          }
+
+          if (yataContext) {
+            yataContext.syncWithServer();
+          }
         }
       })
       .catch((e) => {
@@ -128,17 +194,26 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
         setChannel(null);
         setActiveWriterId(null);
       }
+      if (yataContext) {
+        yataContext.setChannel(null);
+      }
     });
   });
 
   createEffect(() => {
-    const line = cursorContext?.line();
-    const column = cursorContext?.column();
+    const afterElement = cursorContext?.afterElement();
+    const offset = cursorContext?.cursorOffset();
     const ch = channel();
-    if (ch && isConnected() && line !== undefined && column !== undefined) {
-      ch.push("cursor_move", { x: column, y: line }).catch((err) => {
-        console.error("Failed to send cursor position:", err);
-      });
+
+    if (ch && isConnected() && afterElement !== undefined) {
+      ch.push(
+        "cursor_move",
+        {
+          after_element: afterElement,
+          offset: offset ?? 0,
+        },
+        { expectReply: false },
+      );
     }
   });
 

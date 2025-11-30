@@ -1,4 +1,10 @@
-import { onMount, onCleanup, createSignal, useContext } from "solid-js";
+import {
+  onMount,
+  onCleanup,
+  createSignal,
+  useContext,
+  createEffect,
+} from "solid-js";
 import {
   createState,
   handleKeyEvent,
@@ -19,39 +25,127 @@ import {
 import { render } from "./editor/render";
 import { calcScrollOffset } from "./editor/viewport";
 import { CursorContext } from "~/context/cursor";
+import { YataContext } from "~/context/yata";
+import { EditorSyncContext } from "~/context/editor-sync";
 
-export function CanvasEditor() {
+export function CanvasEditor(props: { initialContent?: string }) {
   let canvasRef!: HTMLCanvasElement;
   let animationId: number;
 
   const cursorContext = useContext(CursorContext);
+  const yataContext = useContext(YataContext);
+  const editorSyncContext = useContext(EditorSyncContext);
 
-  const [state, setState] = createSignal<EditorState>(createState(""));
+  const [state, setState] = createSignal<EditorState>(
+    createState(props.initialContent ?? ""),
+  );
   const [scrollOffset, setScrollOffset] = createSignal(0);
 
   const updateCursorPosition = (editorState: EditorState) => {
-    if (!cursorContext) return;
+    if (!cursorContext || !yataContext) return;
 
-    const { doc, cursor } = editorState;
-    const line = Doc.posToLine(doc, cursor) + 1;
-    const lineStart = Doc.lineToPos(doc, line - 1);
-    const column = cursor - lineStart + 1;
-
-    cursorContext.setLine(line);
-    cursorContext.setColumn(column);
+    const { cursor } = editorState;
+    cursorContext.updateFromPosition(cursor, yataContext.positionToElement);
   };
+
+  const applyAndSync = (
+    oldState: EditorState,
+    newState: EditorState,
+    operationType: "insert" | "delete" | "replace",
+    insertedText?: string,
+  ) => {
+    setState(newState);
+    updateCursorPosition(newState);
+
+    if (!editorSyncContext) return;
+
+    const oldLength = Doc.length(oldState.doc);
+    const newLength = Doc.length(newState.doc);
+
+    if (operationType === "insert" && insertedText) {
+      const insertPos = newState.cursor - insertedText.length;
+      editorSyncContext.syncLocalInsert(insertPos, insertedText);
+    } else if (operationType === "delete") {
+      const deleteCount = oldLength - newLength;
+      if (deleteCount > 0) {
+        const deletePos = newState.cursor;
+        editorSyncContext.syncLocalDelete(deletePos, deleteCount);
+      }
+    } else if (operationType === "replace" && insertedText) {
+      const selStart = Math.min(
+        oldState.cursor,
+        oldState.anchor ?? oldState.cursor,
+      );
+      const selEnd = Math.max(
+        oldState.cursor,
+        oldState.anchor ?? oldState.cursor,
+      );
+      const deleteCount = selEnd - selStart;
+
+      if (deleteCount > 0) {
+        editorSyncContext.syncLocalDelete(selStart, deleteCount);
+      }
+      editorSyncContext.syncLocalInsert(selStart, insertedText);
+    }
+  };
+
+  createEffect(() => {
+    if (!editorSyncContext) return;
+
+    const pendingOps = editorSyncContext.pendingRemoteOps();
+    if (pendingOps.length === 0) return;
+
+    let currentState = state();
+
+    for (const op of pendingOps) {
+      if (op.type === "insert") {
+        currentState = {
+          ...currentState,
+          doc: Doc.insertAt(currentState.doc, op.pos, op.content),
+          cursor:
+            op.pos <= currentState.cursor
+              ? currentState.cursor + op.content.length
+              : currentState.cursor,
+          anchor:
+            currentState.anchor !== null && op.pos <= currentState.anchor
+              ? currentState.anchor + op.content.length
+              : currentState.anchor,
+        };
+      } else if (op.type === "delete") {
+        const deleteEnd = op.pos + op.count;
+        currentState = {
+          ...currentState,
+          doc: Doc.deleteRange(currentState.doc, op.pos, deleteEnd),
+          cursor:
+            currentState.cursor > deleteEnd
+              ? currentState.cursor - op.count
+              : currentState.cursor > op.pos
+                ? op.pos
+                : currentState.cursor,
+          anchor:
+            currentState.anchor !== null
+              ? currentState.anchor > deleteEnd
+                ? currentState.anchor - op.count
+                : currentState.anchor > op.pos
+                  ? op.pos
+                  : currentState.anchor
+              : null,
+        };
+      }
+    }
+
+    setState(currentState);
+    editorSyncContext.clearPendingOps();
+  });
 
   onMount(() => {
     const ctx = canvasRef.getContext("2d", {
-      alpha: false, // Opaque canvas for better performance
+      alpha: false,
     });
     if (!ctx) return;
 
     const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const dpr = window.devicePixelRatio || 1;
-
-    // Track current scale to avoid re-scaling issues
-    let currentScale = 1;
 
     const resize = () => {
       const width = window.innerWidth - 20;
@@ -62,12 +156,9 @@ export function CanvasEditor() {
       canvasRef.width = Math.floor(width * dpr);
       canvasRef.height = Math.floor(height * dpr);
 
-      // Reset transform and apply fresh scale (Safari fix)
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
-      currentScale = dpr;
 
-      // Safari: Enable font smoothing
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
     };
@@ -75,7 +166,6 @@ export function CanvasEditor() {
     resize();
     window.addEventListener("resize", resize);
 
-    // Cursor blink state
     let lastBlink = 0;
     let cursorVisible = true;
     const BLINK_INTERVAL = 530;
@@ -85,11 +175,9 @@ export function CanvasEditor() {
       lastBlink = performance.now();
     };
 
-    // Layout cache for dirty region optimization
     let layoutCache = createLayoutCache();
 
     const loop = (time: number) => {
-      // Blink cursor
       if (time - lastBlink > BLINK_INTERVAL) {
         cursorVisible = !cursorVisible;
         lastBlink = time;
@@ -100,7 +188,6 @@ export function CanvasEditor() {
       const canvasHeight = canvasRef.height / dpr;
       const maxTextWidth = canvasWidth - PADDING_X * 2;
 
-      // Get layout from cache (only recomputes if document changed)
       const { layout, cache: newCache } = getLayout(
         layoutCache,
         ctx,
@@ -109,7 +196,6 @@ export function CanvasEditor() {
       );
       layoutCache = newCache;
 
-      // Calculate cursor visual position for scrolling
       const { visualLine } = posToVisual(
         layout,
         currentState.doc,
@@ -141,13 +227,13 @@ export function CanvasEditor() {
         layout,
         cursorVisible,
         cursorContext?.remoteCursors(),
+        yataContext?.elementToPosition,
       );
       animationId = requestAnimationFrame(loop);
     };
 
     animationId = requestAnimationFrame(loop);
 
-    // Mouse state for drag selection
     let mouseState: MouseState = { isDragging: false, startPos: null };
 
     const getMousePos = (e: MouseEvent): { x: number; y: number } => {
@@ -160,12 +246,27 @@ export function CanvasEditor() {
 
     const onKeyDown = (e: KeyboardEvent) => {
       const currentState = state();
+      const oldLength = Doc.length(currentState.doc);
       const { state: newState, handled } = handleKeyEvent(e, currentState);
 
       if (handled) {
-        setState(newState);
-        updateCursorPosition(newState);
+        const newLength = Doc.length(newState.doc);
         resetBlink();
+
+        if (newLength > oldLength) {
+          const insertedLength = newLength - oldLength;
+          const insertPos = newState.cursor - insertedLength;
+          const insertedText = Doc.getText(newState.doc).slice(
+            insertPos,
+            insertPos + insertedLength,
+          );
+          applyAndSync(currentState, newState, "insert", insertedText);
+        } else if (newLength < oldLength) {
+          applyAndSync(currentState, newState, "delete");
+        } else {
+          setState(newState);
+          updateCursorPosition(newState);
+        }
       }
     };
 
@@ -178,7 +279,6 @@ export function CanvasEditor() {
       const canvasWidth = canvasRef.width / dpr;
       const maxTextWidth = canvasWidth - PADDING_X * 2;
 
-      // Use cached layout
       const { layout, cache: newCache } = getLayout(
         layoutCache,
         ctx,
@@ -196,17 +296,13 @@ export function CanvasEditor() {
         scrollOffset(),
       );
 
-      // Start drag selection
       mouseState = { isDragging: true, startPos: pos };
 
-      // Set cursor position, clear selection unless shift is held
       if (e.shiftKey && currentState.anchor !== null) {
-        // Extend existing selection
         const newState = { ...currentState, cursor: pos };
         setState(newState);
         updateCursorPosition(newState);
       } else {
-        // Start new selection/cursor position
         const newState = { ...currentState, cursor: pos, anchor: null };
         setState(newState);
         updateCursorPosition(newState);
@@ -223,7 +319,6 @@ export function CanvasEditor() {
       const canvasWidth = canvasRef.width / dpr;
       const maxTextWidth = canvasWidth - PADDING_X * 2;
 
-      // Use cached layout
       const { layout, cache: newCache } = getLayout(
         layoutCache,
         ctx,
@@ -241,7 +336,6 @@ export function CanvasEditor() {
         scrollOffset(),
       );
 
-      // Update selection: anchor stays at start, cursor follows mouse
       const newState = {
         ...currentState,
         cursor: pos,
@@ -295,8 +389,7 @@ export function CanvasEditor() {
       const { text, state: newState } = cut(currentState);
       if (text && e.clipboardData) {
         e.clipboardData.setData("text/plain", text);
-        setState(newState);
-        updateCursorPosition(newState);
+        applyAndSync(currentState, newState, "delete");
         resetBlink();
       }
     };
@@ -305,9 +398,17 @@ export function CanvasEditor() {
       e.preventDefault();
       const text = e.clipboardData?.getData("text/plain");
       if (text) {
-        const newState = insertText(state(), text);
-        setState(newState);
-        updateCursorPosition(newState);
+        const currentState = state();
+        const hasSelection =
+          currentState.anchor !== null &&
+          currentState.anchor !== currentState.cursor;
+        const newState = insertText(currentState, text);
+
+        if (hasSelection) {
+          applyAndSync(currentState, newState, "replace", text);
+        } else {
+          applyAndSync(currentState, newState, "insert", text);
+        }
         resetBlink();
       }
     };

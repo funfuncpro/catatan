@@ -3,21 +3,31 @@ import * as Solid from "solid-js";
 import { Actor } from "~/types/actor";
 
 export interface CursorContextValue {
-  line: Accessor<number>;
-  column: Accessor<number>;
-  setLine: Setter<number>;
-  setColumn: Setter<number>;
+  afterElement: Accessor<Actor.ElementId>;
+  cursorOffset: Accessor<number>;
+  setAfterElement: Setter<Actor.ElementId>;
+  setCursorOffset: Setter<number>;
+
   remoteCursors: Accessor<Record<string, Actor.Cursor>>;
   setRemoteCursors: Setter<Record<string, Actor.Cursor>>;
+
   updateRemoteCursor: (writerId: string, cursor: Actor.Cursor) => void;
   removeRemoteCursor: (writerId: string) => void;
+
+  updateFromPosition: (
+    pos: number,
+    positionToElement: (pos: number) => {
+      afterElement: Actor.ElementId;
+      offset: number;
+    },
+  ) => void;
 }
 
 export const CursorContext = createContext<CursorContextValue>();
 
 export function CursorContextProvider(props: { children: Solid.JSX.Element }) {
-  const [line, setLine] = createSignal(1);
-  const [column, setColumn] = createSignal(1);
+  const [afterElement, setAfterElement] = createSignal<Actor.ElementId>(null);
+  const [cursorOffset, setCursorOffset] = createSignal<number>(0);
 
   const [remoteCursors, setRemoteCursors] = createSignal<
     Record<string, Actor.Cursor>
@@ -38,15 +48,28 @@ export function CursorContextProvider(props: { children: Solid.JSX.Element }) {
     });
   };
 
+  const updateFromPosition = (
+    pos: number,
+    positionToElement: (pos: number) => {
+      afterElement: Actor.ElementId;
+      offset: number;
+    },
+  ) => {
+    const { afterElement: newAfterElement, offset } = positionToElement(pos);
+    setAfterElement(newAfterElement);
+    setCursorOffset(offset);
+  };
+
   const contextValue: CursorContextValue = {
-    line,
-    column,
-    setLine,
-    setColumn,
+    afterElement,
+    cursorOffset,
+    setAfterElement,
+    setCursorOffset,
     remoteCursors,
     setRemoteCursors,
     updateRemoteCursor,
     removeRemoteCursor,
+    updateFromPosition,
   };
 
   return (

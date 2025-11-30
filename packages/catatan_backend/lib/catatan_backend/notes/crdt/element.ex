@@ -10,8 +10,21 @@ defmodule CatatanBackend.Notes.Crdt.Element do
           deleted_at: String.t() | nil
         }
 
-  @derive Jason.Encoder
   defstruct [:id, :origin, :right_origin, :content, :deleted_at, :note_id]
+
+  defimpl Jason.Encoder, for: CatatanBackend.Notes.Crdt.Element do
+    def encode(element, opts) do
+      element
+      |> Map.from_struct()
+      |> Map.update(:id, nil, &encode_id/1)
+      |> Map.update(:origin, nil, &encode_id/1)
+      |> Map.update(:right_origin, nil, &encode_id/1)
+      |> Jason.Encode.map(opts)
+    end
+
+    defp encode_id(nil), do: nil
+    defp encode_id({writer_id, clock}), do: [writer_id, clock]
+  end
 
   @spec parse(map()) :: {:ok, t()} | {:error, String.t()}
   def parse(%{

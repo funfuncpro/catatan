@@ -22,8 +22,15 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
           elements: %{String.t() => Element.t()},
           state_vector: StateVector.t()
         }
-  @derive Jason.Encoder
   defstruct [:note_id, :writer_id, :clock, :elements, :state_vector]
+
+  defimpl Jason.Encoder, for: CatatanBackend.Notes.Crdt.Yata do
+    def encode(yata, opts) do
+      yata
+      |> Map.from_struct()
+      |> Jason.Encode.map(opts)
+    end
+  end
 
   @spec initialize(String.t(), String.t()) :: t
   def initialize(note_id, writer_id) do
