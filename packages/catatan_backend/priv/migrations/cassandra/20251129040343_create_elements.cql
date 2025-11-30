@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS note_elements (
     deleted_at TIMESTAMP,
     created_at TIMESTAMP,
     PRIMARY KEY (note_id, element_id)
-);
+)
