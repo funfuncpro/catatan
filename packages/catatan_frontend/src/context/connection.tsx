@@ -15,6 +15,7 @@ import {
   PresenceStatePayload,
   RemoteInsertPayload,
   RemoteDeletePayload,
+  RemoteDeleteBatchPayload,
 } from "~/lib/notes";
 import { PhoenixChannel } from "~/lib/websocket";
 import { CursorContext } from "./cursor";
@@ -159,6 +160,38 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       }
     };
 
+    const handleRemoteDeleteBatch = (payload: RemoteDeleteBatchPayload) => {
+      if (!yataContext) return;
+
+      const { element_ids, deleted_at } = payload;
+      if (element_ids.length === 0) return;
+
+      // Get position of first element before marking deleted
+      const firstElementIdParts = element_ids[0].split(":");
+      if (firstElementIdParts.length !== 2) {
+        console.warn("Invalid element_id format:", element_ids[0]);
+        return;
+      }
+
+      const firstElementId: [string, number] = [
+        firstElementIdParts[0],
+        parseInt(firstElementIdParts[1], 10),
+      ];
+
+      const pos = yataContext.elementToPosition(firstElementId, 0);
+
+      // Mark all elements as deleted in a single update
+      yataContext.markRemoteDeletedBatch(element_ids, deleted_at);
+
+      if (editorSyncContext && pos >= 0) {
+        editorSyncContext.pushRemoteOp({
+          type: "delete",
+          pos,
+          count: element_ids.length,
+        });
+      }
+    };
+
     createNotesChannel({
       noteID,
       setIsConnected(connected) {
@@ -168,6 +201,7 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       onPresenceState: handlePresenceState,
       onRemoteInsert: handleRemoteInsert,
       onRemoteDelete: handleRemoteDelete,
+      onRemoteDeleteBatch: handleRemoteDeleteBatch,
     })
       .then((ch) => {
         if (ch) {

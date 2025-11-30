@@ -26,6 +26,12 @@ export interface RemoteDeletePayload {
   deleted_at: string;
 }
 
+/** Remote batch delete event payload from server */
+export interface RemoteDeleteBatchPayload {
+  element_ids: string[];
+  deleted_at: string;
+}
+
 /** Callbacks for notes channel events */
 export interface NotesChannelCallbacks {
   setIsConnected: (connected: boolean) => void;
@@ -33,6 +39,7 @@ export interface NotesChannelCallbacks {
   onPresenceState?: (payload: PresenceStatePayload) => void;
   onRemoteInsert?: (payload: RemoteInsertPayload) => void;
   onRemoteDelete?: (payload: RemoteDeletePayload) => void;
+  onRemoteDeleteBatch?: (payload: RemoteDeleteBatchPayload) => void;
 }
 
 export async function createNotesChannel({
@@ -42,6 +49,7 @@ export async function createNotesChannel({
   onPresenceState,
   onRemoteInsert,
   onRemoteDelete,
+  onRemoteDeleteBatch,
 }: NotesChannelCallbacks & { noteID: string }): Promise<
   PhoenixChannel | undefined
 > {
@@ -100,6 +108,17 @@ export async function createNotesChannel({
           console.log("Remote delete:", payload);
           onRemoteDelete(payload);
         });
+      }
+
+      // Remote batch delete events (when another client deletes multiple elements)
+      if (onRemoteDeleteBatch) {
+        channel.on<RemoteDeleteBatchPayload>(
+          "remote_delete_batch",
+          (payload) => {
+            console.log("Remote delete batch:", payload);
+            onRemoteDeleteBatch(payload);
+          },
+        );
       }
     }
 

@@ -11,6 +11,7 @@ defmodule CatatanBackendWeb.Channels.Notes do
     with {:ok, validated_id} <- NotesValidator.validate_note_id(notes_id),
          :ok <- ensure_session_started(validated_id),
          :ok <- ensure_crdt_started(validated_id),
+         :ok <- ensure_persistence_started(validated_id),
          {:ok, my_writer, all_writers} <-
            NotesSession.join(validated_id, nil) do
       Phoenix.PubSub.subscribe(CatatanBackend.PubSub, "notes:" <> validated_id)
@@ -83,6 +84,26 @@ defmodule CatatanBackendWeb.Channels.Notes do
 
           {:error, reason} ->
             Logger.error("Delete failed: #{inspect(reason)}")
+            {:reply, {:error, %{reason: inspect(reason)}}, socket}
+        end
+
+      {:error, errors} ->
+        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("delete_batch", payload, socket) do
+    case NotesValidator.validate_delete_batch(payload) do
+      {:ok, %{element_ids: element_ids}} ->
+        notes_id = socket.assigns.notes_id
+
+        case NotesNew.delete_batch(notes_id, element_ids) do
+          {:ok, result} ->
+            {:reply, {:ok, result}, socket}
+
+          {:error, reason} ->
+            Logger.error("Batch delete failed: #{inspect(reason)}")
             {:reply, {:error, %{reason: inspect(reason)}}, socket}
         end
 
@@ -193,6 +214,23 @@ defmodule CatatanBackendWeb.Channels.Notes do
 
       {:error, reason} = error ->
         Logger.error("Failed to start CRDT server: #{inspect(reason)}")
+        error
+    end
+  end
+
+  defp ensure_persistence_started(note_id) do
+    case DynamicSupervisor.start_child(
+           CatatanBackend.NotesCrdtSupervisor,
+           {CatatanBackend.Server.NotesPersistence, note_id}
+         ) do
+      {:ok, _pid} ->
+        :ok
+
+      {:error, {:already_started, _pid}} ->
+        :ok
+
+      {:error, reason} = error ->
+        Logger.error("Failed to start persistence server: #{inspect(reason)}")
         error
     end
   end

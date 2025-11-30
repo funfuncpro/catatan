@@ -157,6 +157,52 @@ defmodule CatatanBackendWeb.NotesValidator do
   end
 
   @doc """
+  Validates the payload for delete_batch channel event.
+  Expects a map with required :element_ids key (list of strings).
+  Maximum batch size is 1000 elements.
+  """
+  @spec validate_delete_batch(map()) :: {:ok, map()} | {:error, map()}
+  def validate_delete_batch(params) do
+    types = %{element_ids: {:array, :string}}
+
+    {%{}, types}
+    |> cast(params, [:element_ids])
+    |> validate_required([:element_ids])
+    |> validate_length(:element_ids, min: 1, max: 1000)
+    |> validate_change(:element_ids, &validate_element_id_list/2)
+    |> case do
+      %Ecto.Changeset{valid?: true, changes: changes} ->
+        {:ok, changes}
+
+      %Ecto.Changeset{valid?: false, errors: errors} ->
+        {:error, Error.format_ecto_error(errors)}
+    end
+  end
+
+  defp validate_element_id_list(_field, element_ids) do
+    if Enum.all?(element_ids, &valid_element_id_string?/1) do
+      []
+    else
+      [{:element_ids, "all element IDs must be in format 'writer_id:clock'"}]
+    end
+  end
+
+  defp valid_element_id_string?(id) when is_binary(id) do
+    case String.split(id, ":") do
+      [_writer_id, clock] ->
+        case Integer.parse(clock) do
+          {_, ""} -> true
+          _ -> false
+        end
+
+      _ ->
+        false
+    end
+  end
+
+  defp valid_element_id_string?(_), do: false
+
+  @doc """
   Validates the payload for sync channel event.
   Expects a map with required :state_vector key.
   """

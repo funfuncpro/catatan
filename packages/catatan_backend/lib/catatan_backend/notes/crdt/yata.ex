@@ -105,6 +105,38 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
   end
 
   @doc """
+  Marks multiple elements as deleted atomically.
+
+  ## Parameters
+    - yata: The Yata struct
+    - element_ids: List of encoded element IDs (e.g., ["writer_id:clock", ...])
+
+  ## Returns
+    - `{:ok, updated_yata, deleted_elements, not_found_ids}`
+  """
+  @spec delete_batch(t, [String.t()]) :: {:ok, t, [Element.t()], [String.t()]}
+  def delete_batch(%__MODULE__{} = yata, element_ids) do
+    deleted_at = DateTime.utc_now() |> DateTime.to_iso8601()
+
+    {updated_elements, deleted, not_found} =
+      Enum.reduce(element_ids, {yata.elements, [], []}, fn element_id,
+                                                           {elements, deleted_acc, not_found_acc} ->
+        case Map.get(elements, element_id) do
+          nil ->
+            {elements, deleted_acc, [element_id | not_found_acc]}
+
+          element ->
+            updated_element = %{element | deleted_at: deleted_at}
+            updated_elements = Map.put(elements, element_id, updated_element)
+            {updated_elements, [updated_element | deleted_acc], not_found_acc}
+        end
+      end)
+
+    updated_yata = %{yata | elements: updated_elements}
+    {:ok, updated_yata, Enum.reverse(deleted), Enum.reverse(not_found)}
+  end
+
+  @doc """
   Integrates a remote element into the local YATA structure.
 
   This implements the YATA integration algorithm:

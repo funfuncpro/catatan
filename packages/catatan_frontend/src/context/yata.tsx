@@ -10,8 +10,10 @@ export interface YataContextValue {
     content: string,
   ) => Promise<CRDT.Element | null>;
   deleteAtPosition: (pos: number) => Promise<boolean>;
+  deleteBatchAtPosition: (pos: number, count: number) => Promise<boolean>;
   integrateRemoteElement: (element: CRDT.SerializedElement) => void;
   markRemoteDeleted: (elementId: string, deletedAt: string) => void;
+  markRemoteDeletedBatch: (elementIds: string[], deletedAt: string) => void;
   syncWithServer: () => Promise<void>;
   getText: () => string;
   positionToElement: (pos: number) => CRDT.Cursor;
@@ -129,6 +131,51 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     setDocument(newDoc);
   };
 
+  const markRemoteDeletedBatch = (elementIds: string[], deletedAt: string) => {
+    const doc = document();
+    if (!doc) return;
+
+    const newDoc = doc.clone();
+    for (const elementId of elementIds) {
+      newDoc.markDeletedFromServer(elementId, deletedAt);
+    }
+    setDocument(newDoc);
+  };
+
+  const deleteBatchAtPosition = async (
+    pos: number,
+    count: number,
+  ): Promise<boolean> => {
+    const doc = document();
+    const ch = channel();
+
+    if (!doc || !ch) {
+      console.error("Cannot delete batch: document or channel not initialized");
+      return false;
+    }
+
+    const elementIds = doc.getDeleteTargetRange(pos, count);
+    if (elementIds.length === 0) {
+      console.warn("No elements to delete at position:", pos);
+      return false;
+    }
+
+    try {
+      await ch.push("delete_batch", { element_ids: elementIds });
+
+      const newDoc = doc.clone();
+      for (const elementId of elementIds) {
+        newDoc.delete(elementId);
+      }
+      setDocument(newDoc);
+
+      return true;
+    } catch (error) {
+      console.error("Failed to delete batch:", error);
+      return false;
+    }
+  };
+
   const syncWithServer = async () => {
     const doc = document();
     const ch = channel();
@@ -186,8 +233,10 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     initializeDocument,
     insertAtPosition,
     deleteAtPosition,
+    deleteBatchAtPosition,
     integrateRemoteElement,
     markRemoteDeleted,
+    markRemoteDeletedBatch,
     syncWithServer,
     getText,
     positionToElement,

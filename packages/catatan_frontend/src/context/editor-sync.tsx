@@ -57,9 +57,8 @@ export function EditorSyncContextProvider(props: { children: JSX.Element }) {
     }
 
     try {
-      for (let i = 0; i < count; i++) {
-        await yataContext.deleteAtPosition(pos);
-      }
+      // Use batch delete for efficiency - single network call instead of multiple
+      await yataContext.deleteBatchAtPosition(pos, count);
     } catch (error) {
       console.error("Failed to sync local delete:", error);
       // TODO: Handle conflict/rollback if needed

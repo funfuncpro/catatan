@@ -14,7 +14,6 @@ export const Route = createFileRoute("/")({
   component: Index,
   loader: async () => {
     const noteData = await getEditorSessionFn();
-    console.log(noteData);
     return { noteData };
   },
 });

@@ -46,6 +46,7 @@ export interface YataDocument {
     rightOrigin: CRDT.ElementId | null;
   };
   getDeleteTarget: (pos: number) => string | null;
+  getDeleteTargetRange: (pos: number, count: number) => string[];
   getDelta: (clientStateVector: CRDT.StateVector) => CRDT.Element[];
 
   // Utility
@@ -472,6 +473,34 @@ export function createYataDocument(
     return null;
   };
 
+  /**
+   * Get element IDs for batch deletion starting at pos for count characters.
+   */
+  const getDeleteTargetRange = (pos: number, count: number): string[] => {
+    const elements = toList();
+    const elementIds: string[] = [];
+    let currentPos = 0;
+    let remaining = count;
+
+    for (const el of elements) {
+      const len = el.content.length;
+
+      if (currentPos + len > pos && remaining > 0) {
+        const elementId = CRDT.ElementId.encode(el.id);
+        if (elementId) {
+          elementIds.push(elementId);
+          remaining--;
+        }
+      }
+
+      currentPos += len;
+
+      if (remaining <= 0) break;
+    }
+
+    return elementIds;
+  };
+
   const getDelta = (clientStateVector: CRDT.StateVector): CRDT.Element[] => {
     const delta: CRDT.Element[] = [];
 
@@ -513,6 +542,7 @@ export function createYataDocument(
     elementAtPosition,
     getInsertPosition,
     getDeleteTarget,
+    getDeleteTargetRange,
     getDelta,
     clone,
   };

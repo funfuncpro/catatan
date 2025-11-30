@@ -9,6 +9,7 @@ defmodule CatatanBackend.Server.NotesNew do
   use GenServer
   require Logger
   alias CatatanBackend.Notes.Crdt.{Yata, Element, Store, Sync}
+  alias CatatanBackend.Server.NotesPersistence
 
   @spec start_link(String.t()) :: GenServer.on_start()
   def start_link(note_id) do
@@ -41,6 +42,18 @@ defmodule CatatanBackend.Server.NotesNew do
   @spec delete(String.t(), String.t()) :: {:ok, Element.t()} | {:error, term()}
   def delete(note_id, element_id) do
     GenServer.call(via_tuple(note_id), {:delete, element_id})
+  end
+
+  @doc """
+  Marks multiple elements as deleted (tombstone) in a single operation.
+
+  ## Parameters
+    - note_id: The note identifier
+    - element_ids: List of encoded element IDs
+  """
+  @spec delete_batch(String.t(), [String.t()]) :: {:ok, map()} | {:error, term()}
+  def delete_batch(note_id, element_ids) do
+    GenServer.call(via_tuple(note_id), {:delete_batch, element_ids})
   end
 
   @doc """
@@ -92,15 +105,14 @@ defmodule CatatanBackend.Server.NotesNew do
 
     element_with_note = %{element | note_id: state.note_id}
 
-    case Store.save_element(element_with_note) do
-      :ok ->
-        broadcast_operation(state.note_id, {:insert, element_with_note})
-        {:reply, {:ok, element_with_note}, %{state | yata: updated_yata}}
+    # Async persistence - fire and forget to Cassandra
+    NotesPersistence.save_element(state.note_id, element_with_note)
 
-      {:error, reason} ->
-        Logger.error("Failed to save element: #{inspect(reason)}")
-        {:reply, {:error, reason}, state}
-    end
+    # Broadcast to other clients immediately
+    broadcast_operation(state.note_id, {:insert, element_with_note})
+
+    # Reply immediately without waiting for DB
+    {:reply, {:ok, element_with_note}, %{state | yata: updated_yata}}
   end
 
   @impl true
@@ -109,19 +121,40 @@ defmodule CatatanBackend.Server.NotesNew do
       {:ok, updated_yata, deleted_element} ->
         deleted_at = DateTime.utc_now()
 
-        case Store.mark_deleted(state.note_id, element_id, deleted_at) do
-          :ok ->
-            broadcast_operation(state.note_id, {:delete, element_id, deleted_at})
-            {:reply, {:ok, deleted_element}, %{state | yata: updated_yata}}
+        # Async persistence - fire and forget to Cassandra
+        NotesPersistence.mark_deleted(state.note_id, element_id, deleted_at)
 
-          {:error, reason} ->
-            Logger.error("Failed to mark element deleted: #{inspect(reason)}")
-            {:reply, {:error, reason}, state}
-        end
+        # Broadcast to other clients immediately
+        broadcast_operation(state.note_id, {:delete, element_id, deleted_at})
+
+        # Reply immediately without waiting for DB
+        {:reply, {:ok, deleted_element}, %{state | yata: updated_yata}}
 
       {:error, :not_found} ->
         {:reply, {:error, :not_found}, state}
     end
+  end
+
+  @impl true
+  def handle_call({:delete_batch, element_ids}, _from, state) do
+    {:ok, updated_yata, deleted_elements, not_found} =
+      Yata.delete_batch(state.yata, element_ids)
+
+    deleted_at = DateTime.utc_now()
+
+    # Async persistence - batch delete to Cassandra
+    deletions = Enum.map(deleted_elements, fn el -> Element.encode_id(el.id) end)
+    NotesPersistence.mark_deleted_batch(state.note_id, deletions, deleted_at)
+
+    # Broadcast each deletion to other clients
+    Enum.each(deleted_elements, fn el ->
+      element_id = Element.encode_id(el.id)
+      broadcast_operation(state.note_id, {:delete, element_id, deleted_at})
+    end)
+
+    # Reply immediately without waiting for DB
+    {:reply, {:ok, %{deleted_count: length(deleted_elements), not_found: not_found}},
+     %{state | yata: updated_yata}}
   end
 
   @impl true
