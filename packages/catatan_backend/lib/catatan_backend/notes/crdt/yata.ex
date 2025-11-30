@@ -17,19 +17,19 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
 
   @type t :: %__MODULE__{
           note_id: String.t(),
-          site_id: String.t(),
+          writer_id: String.t(),
           clock: integer(),
           elements: %{String.t() => Element.t()},
           state_vector: StateVector.t()
         }
   @derive Jason.Encoder
-  defstruct [:note_id, :site_id, :clock, :elements, :state_vector]
+  defstruct [:note_id, :writer_id, :clock, :elements, :state_vector]
 
   @spec initialize(String.t(), String.t()) :: t
-  def initialize(note_id, site_id) do
+  def initialize(note_id, writer_id) do
     %__MODULE__{
       note_id: note_id,
-      site_id: site_id,
+      writer_id: writer_id,
       clock: 0,
       elements: %{},
       state_vector: StateVector.initialize()
@@ -43,13 +43,13 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
 
   @spec generate_id(t) :: {String.t(), integer()}
   def generate_id(%__MODULE__{} = yata) do
-    {yata.site_id, yata.clock}
+    {yata.writer_id, yata.clock}
   end
 
   @spec insert(t, Element.id() | nil, Element.id() | nil, String.t()) :: {t, Element.t()}
   def insert(%__MODULE__{} = yata, origin, right_origin, content) do
     new_yata = increment_clock(yata)
-    id = {new_yata.site_id, new_yata.clock}
+    id = {new_yata.writer_id, new_yata.clock}
 
     element = %Element{
       id: id,
@@ -60,7 +60,7 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
     }
 
     element_key = Element.encode_id(element.id)
-    state_vector = StateVector.update(new_yata.state_vector, new_yata.site_id, new_yata.clock)
+    state_vector = StateVector.update(new_yata.state_vector, new_yata.writer_id, new_yata.clock)
 
     updated_yata = %{
       new_yata
@@ -71,14 +71,30 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
     {updated_yata, element}
   end
 
-  @spec delete(t, String.t()) :: {t, Element.t()}
+  @doc """
+  Marks an element as deleted by setting its deleted_at timestamp.
+
+  ## Parameters
+    - yata: The Yata struct
+    - element_id: The encoded element ID (e.g., "writer_id:clock")
+
+  ## Returns
+    - `{:ok, updated_yata, deleted_element}` on success
+    - `{:error, :not_found}` if element doesn't exist
+  """
+  @spec delete(t, String.t()) :: {:ok, t, Element.t()} | {:error, :not_found}
   def delete(%__MODULE__{} = yata, element_id) do
-    element = Map.get(yata.elements, element_id)
-    deleted_at = DateTime.utc_now() |> DateTime.to_iso8601()
-    updated_element = %{element | deleted_at: deleted_at}
-    updated_elements = Map.put(yata.elements, element_id, updated_element)
-    updated_yata = %{yata | elements: updated_elements}
-    {updated_yata, updated_element}
+    case Map.get(yata.elements, element_id) do
+      nil ->
+        {:error, :not_found}
+
+      element ->
+        deleted_at = DateTime.utc_now() |> DateTime.to_iso8601()
+        updated_element = %{element | deleted_at: deleted_at}
+        updated_elements = Map.put(yata.elements, element_id, updated_element)
+        updated_yata = %{yata | elements: updated_elements}
+        {:ok, updated_yata, updated_element}
+    end
   end
 
   @doc """
@@ -93,7 +109,7 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
   @spec integrate(t, Element.t()) :: t
   def integrate(%__MODULE__{} = yata, %Element{} = element) do
     element_key = Element.encode_id(element.id)
-    {site_id, clock} = element.id
+    {writer_id, clock} = element.id
 
     if Map.has_key?(yata.elements, element_key) do
       existing = Map.get(yata.elements, element_key)
@@ -103,7 +119,7 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
       %{
         yata
         | elements: Map.put(yata.elements, element_key, element),
-          state_vector: StateVector.update(yata.state_vector, site_id, clock)
+          state_vector: StateVector.update(yata.state_vector, writer_id, clock)
       }
     end
   end
@@ -257,11 +273,11 @@ defmodule CatatanBackend.Notes.Crdt.Yata do
   defp compare_by_id(nil, _), do: true
   defp compare_by_id(_, nil), do: false
 
-  defp compare_by_id({site_a, clock_a}, {site_b, clock_b}) do
+  defp compare_by_id({writer_a, clock_a}, {writer_b, clock_b}) do
     cond do
       clock_a < clock_b -> true
       clock_a > clock_b -> false
-      true -> site_a < site_b
+      true -> writer_a < writer_b
     end
   end
 end

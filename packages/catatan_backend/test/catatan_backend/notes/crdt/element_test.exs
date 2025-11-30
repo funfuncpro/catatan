@@ -6,30 +6,30 @@ defmodule CatatanBackend.Notes.Crdt.ElementTest do
   describe "parse/1" do
     test "parses a valid element from JSON-like map" do
       input = %{
-        "id" => ["site1", 1],
-        "origin" => ["site1", 0],
-        "right_origin" => ["site2", 2],
+        "id" => ["writer1", 1],
+        "origin" => ["writer1", 0],
+        "right_origin" => ["writer2", 2],
         "content" => "a"
       }
 
       assert {:ok, element} = Element.parse(input)
-      assert element.id == {"site1", 1}
-      assert element.origin == {"site1", 0}
-      assert element.right_origin == {"site2", 2}
+      assert element.id == {"writer1", 1}
+      assert element.origin == {"writer1", 0}
+      assert element.right_origin == {"writer2", 2}
       assert element.content == "a"
       assert element.deleted_at == nil
     end
 
     test "parses element with nil origin and right_origin" do
       input = %{
-        "id" => ["site1", 1],
+        "id" => ["writer1", 1],
         "origin" => nil,
         "right_origin" => nil,
         "content" => "x"
       }
 
       assert {:ok, element} = Element.parse(input)
-      assert element.id == {"site1", 1}
+      assert element.id == {"writer1", 1}
       assert element.origin == nil
       assert element.right_origin == nil
       assert element.content == "x"
@@ -37,14 +37,14 @@ defmodule CatatanBackend.Notes.Crdt.ElementTest do
 
     test "returns error for invalid format" do
       assert {:error, "Invalid element format"} = Element.parse(%{})
-      assert {:error, "Invalid element format"} = Element.parse(%{"id" => ["site1", 1]})
+      assert {:error, "Invalid element format"} = Element.parse(%{"id" => ["writer1", 1]})
       assert {:error, "Invalid element format"} = Element.parse("not a map")
     end
   end
 
   describe "encode_id/1" do
     test "encodes a tuple id to string" do
-      assert Element.encode_id({"site1", 42}) == "site1:42"
+      assert Element.encode_id({"writer1", 42}) == "writer1:42"
       assert Element.encode_id({"user-abc", 0}) == "user-abc:0"
     end
 
@@ -55,7 +55,7 @@ defmodule CatatanBackend.Notes.Crdt.ElementTest do
 
   describe "decode_id/1" do
     test "decodes a string id to tuple" do
-      assert Element.decode_id("site1:42") == {"site1", 42}
+      assert Element.decode_id("writer1:42") == {"writer1", 42}
       assert Element.decode_id("user-abc:0") == {"user-abc", 0}
     end
 
@@ -66,7 +66,7 @@ defmodule CatatanBackend.Notes.Crdt.ElementTest do
 
   describe "encode_id/1 and decode_id/1 roundtrip" do
     test "roundtrip preserves the id" do
-      id = {"my-site", 123}
+      id = {"my-writer", 123}
       assert id == id |> Element.encode_id() |> Element.decode_id()
     end
   end

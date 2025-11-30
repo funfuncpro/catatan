@@ -1,5 +1,5 @@
 defmodule CatatanBackend.Notes.Crdt.Element do
-  @type id :: {site_id :: String.t(), clock :: non_neg_integer()}
+  @type id :: {writer_id :: String.t(), clock :: non_neg_integer()}
 
   @type t :: %__MODULE__{
           id: id(),
@@ -35,19 +35,19 @@ defmodule CatatanBackend.Notes.Crdt.Element do
   @spec parse_id(list() | nil) :: id() | nil
   defp parse_id(nil), do: nil
 
-  defp parse_id([site_id, clock]) when is_binary(site_id) and is_integer(clock),
-    do: {site_id, clock}
+  defp parse_id([writer_id, clock]) when is_binary(writer_id) and is_integer(clock),
+    do: {writer_id, clock}
 
   @spec encode_id(id() | nil) :: String.t() | nil
   def encode_id(nil), do: nil
-  def encode_id({site_id, clock}), do: "#{site_id}:#{clock}"
+  def encode_id({writer_id, clock}), do: "#{writer_id}:#{clock}"
 
   @spec decode_id(String.t() | nil) :: id() | nil
   def decode_id(nil), do: nil
 
   def decode_id(str) do
-    [site_id, clock] = String.split(str, ":")
-    {site_id, String.to_integer(clock)}
+    [writer_id, clock] = String.split(str, ":")
+    {writer_id, String.to_integer(clock)}
   end
 
   @spec merge_deleted(t, t) :: term()

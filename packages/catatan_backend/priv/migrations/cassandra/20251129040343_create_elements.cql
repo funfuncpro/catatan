@@ -1,6 +1,6 @@
 -- create_elements
 
-CREATE TABLE IF NOT EXISTS note_elements (
+CREATE TABLE IF NOT EXISTS notes_elements (
     note_id TEXT,
     element_id TEXT,
     origin_id TEXT,
@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS note_elements (
     deleted_at TIMESTAMP,
     created_at TIMESTAMP,
     PRIMARY KEY (note_id, element_id)
-)
+);

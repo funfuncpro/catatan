@@ -4,8 +4,8 @@ defmodule CatatanBackend.Notes.Crdt.Store do
 
   @spec save_element(Element.t()) :: :ok | {:error, term()}
   def save_element(%Element{} = element) do
-    {site_id, clock} = element.id
-    element_id = "#{site_id}:#{clock}"
+    {writer_id, clock} = element.id
+    element_id = "#{writer_id}:#{clock}"
 
     with {:ok, prepared} <-
            CassandraClient.prepare(
@@ -64,15 +64,15 @@ defmodule CatatanBackend.Notes.Crdt.Store do
   end
 
   @spec save_state_vector(String.t(), String.t(), integer()) :: :ok | {:error, term()}
-  def save_state_vector(note_id, site_id, clock) do
+  def save_state_vector(note_id, writer_id, clock) do
     with {:ok, prepared} <-
            CassandraClient.prepare(
-             "INSERT INTO notes_state_vectors (note_id, site_id, clock, updated_at) VALUES (:note_id, :site_id, :clock, toTimestamp(now()))"
+             "INSERT INTO notes_state_vectors (note_id, writer_id, clock, updated_at) VALUES (:note_id, :writer_id, :clock, toTimestamp(now()))"
            ),
          {:ok, _result} <-
            CassandraClient.execute(prepared, %{
              "note_id" => note_id,
-             "site_id" => site_id,
+             "writer_id" => writer_id,
              "clock" => clock
            }) do
       :ok
@@ -86,7 +86,7 @@ defmodule CatatanBackend.Notes.Crdt.Store do
   def load_state_vector(note_id) do
     with {:ok, prepared} <-
            CassandraClient.prepare(
-             "SELECT site_id, clock FROM notes_state_vectors WHERE note_id = :note_id"
+             "SELECT writer_id, clock FROM notes_state_vectors WHERE note_id = :note_id"
            ),
          {:ok, %Xandra.Page{} = page} <-
            CassandraClient.execute(prepared, %{
@@ -95,7 +95,7 @@ defmodule CatatanBackend.Notes.Crdt.Store do
       state_vector =
         page
         |> Enum.reduce(%{}, fn row, acc ->
-          Map.put(acc, row["site_id"], row["clock"])
+          Map.put(acc, row["writer_id"], row["clock"])
         end)
 
       {:ok, state_vector}
@@ -105,7 +105,7 @@ defmodule CatatanBackend.Notes.Crdt.Store do
     end
   end
 
-  defp format_id({site_id, clock}), do: "#{site_id}:#{clock}"
+  defp format_id({writer_id, clock}), do: "#{writer_id}:#{clock}"
   defp format_id(nil), do: nil
 
   defp row_to_element(row) do
@@ -122,7 +122,7 @@ defmodule CatatanBackend.Notes.Crdt.Store do
   defp parse_id(nil), do: nil
 
   defp parse_id(str) do
-    [site_id, clock] = String.split(str, ":")
-    {site_id, String.to_integer(clock)}
+    [writer_id, clock] = String.split(str, ":")
+    {writer_id, String.to_integer(clock)}
   end
 end

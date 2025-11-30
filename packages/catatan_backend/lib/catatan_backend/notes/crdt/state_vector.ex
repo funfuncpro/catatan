@@ -1,6 +1,6 @@
 defmodule CatatanBackend.Notes.Crdt.StateVector do
   @moduledoc """
-  Tracks what operations seen from each site.
+  Tracks what operations have been seen from each writer.
   """
 
   @type t :: %{String.t() => integer()}
@@ -9,22 +9,22 @@ defmodule CatatanBackend.Notes.Crdt.StateVector do
   def initialize, do: %{}
 
   @spec update(t, String.t(), integer()) :: t
-  def update(sv, site_id, clock) do
-    Map.update(sv, site_id, clock, &max(&1, clock))
+  def update(sv, writer_id, clock) do
+    Map.update(sv, writer_id, clock, &max(&1, clock))
   end
 
   @spec has_seen?(t, String.t(), integer()) :: boolean()
-  def has_seen?(sv, site_id, clock) do
-    Map.get(sv, site_id, 0) >= clock
+  def has_seen?(sv, writer_id, clock) do
+    Map.get(sv, writer_id, 0) >= clock
   end
 
   @spec missing(t, t) :: [{String.t(), integer(), integer()}]
   def missing(ours, theirs) do
-    Enum.flat_map(theirs, fn {site_id, their_clock} ->
-      our_clock = Map.get(ours, site_id, 0)
+    Enum.flat_map(theirs, fn {writer_id, their_clock} ->
+      our_clock = Map.get(ours, writer_id, 0)
 
       if their_clock > our_clock do
-        [{site_id, our_clock + 1, their_clock}]
+        [{writer_id, our_clock + 1, their_clock}]
       else
         []
       end
