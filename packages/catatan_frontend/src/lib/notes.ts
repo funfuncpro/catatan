@@ -1,20 +1,73 @@
 import { Notes } from "~/types/note";
-import { websocketConnectFn } from "./websocket";
+import { Actor } from "~/types/actor";
+import { CRDT } from "~/lib/crdt";
+import { websocketConnectFn, PhoenixChannel } from "./websocket";
+
+/** Response received when joining the notes channel */
+export interface JoinResponse {
+  my_writer_id: string;
+  writers: Actor.WritersMap;
+}
+
+/** Presence state event payload from server */
+export interface PresenceStatePayload {
+  event: "presence_state";
+  writers: Actor.WritersMap;
+}
+
+/** Remote insert event payload from server */
+export interface RemoteInsertPayload {
+  element: CRDT.SerializedElement;
+}
+
+/** Remote delete event payload from server */
+export interface RemoteDeletePayload {
+  element_id: string;
+  deleted_at: string;
+}
+
+/** Remote batch delete event payload from server */
+export interface RemoteDeleteBatchPayload {
+  element_ids: string[];
+  deleted_at: string;
+}
+
+/** Callbacks for notes channel events */
+export interface NotesChannelCallbacks {
+  setIsConnected: (connected: boolean) => void;
+  onJoinSuccess?: (response: JoinResponse) => void;
+  onPresenceState?: (payload: PresenceStatePayload) => void;
+  onRemoteInsert?: (payload: RemoteInsertPayload) => void;
+  onRemoteDelete?: (payload: RemoteDeletePayload) => void;
+  onRemoteDeleteBatch?: (payload: RemoteDeleteBatchPayload) => void;
+}
 
 export async function createNotesChannel({
   noteID,
   setIsConnected,
-}: {
-  noteID: string;
-  setIsConnected: (connected: boolean) => void;
-}) {
-  const connectionKey = `note:${noteID}`;
+  onJoinSuccess,
+  onPresenceState,
+  onRemoteInsert,
+  onRemoteDelete,
+  onRemoteDeleteBatch,
+}: NotesChannelCallbacks & { noteID: string }): Promise<
+  PhoenixChannel | undefined
+> {
+  const connectionKey = `notes:${noteID}`;
+  const url = `${import.meta.env.VITE_API_URL}/socket/notes/websocket`;
 
   try {
-    const channel = await websocketConnectFn(connectionKey, {
+    const channel = await websocketConnectFn(url, connectionKey, {
       onJoin(response) {
-        console.log("Connected to notes channel:", response.body);
+        console.log("Connected to notes channel:", response);
         setIsConnected(true);
+
+        // The server returns { my_writer_id: string, writers: { id: Writer, ... } }
+        const joinResponse = response as unknown as JoinResponse;
+
+        if (joinResponse.writers && joinResponse.my_writer_id) {
+          onJoinSuccess?.(joinResponse);
+        }
       },
 
       onJoinError: (error) => {
@@ -30,6 +83,45 @@ export async function createNotesChannel({
         setIsConnected(false);
       },
     });
+
+    // Register event handlers
+    if (channel) {
+      // Presence state updates
+      if (onPresenceState) {
+        channel.on<PresenceStatePayload>("presence_state", (payload) => {
+          console.log("Presence state update:", payload);
+          onPresenceState(payload);
+        });
+      }
+
+      // Remote insert events (when another client inserts)
+      if (onRemoteInsert) {
+        channel.on<RemoteInsertPayload>("remote_insert", (payload) => {
+          console.log("Remote insert:", payload);
+          onRemoteInsert(payload);
+        });
+      }
+
+      // Remote delete events (when another client deletes)
+      if (onRemoteDelete) {
+        channel.on<RemoteDeletePayload>("remote_delete", (payload) => {
+          console.log("Remote delete:", payload);
+          onRemoteDelete(payload);
+        });
+      }
+
+      // Remote batch delete events (when another client deletes multiple elements)
+      if (onRemoteDeleteBatch) {
+        channel.on<RemoteDeleteBatchPayload>(
+          "remote_delete_batch",
+          (payload) => {
+            console.log("Remote delete batch:", payload);
+            onRemoteDeleteBatch(payload);
+          },
+        );
+      }
+    }
+
     return channel;
   } catch (err) {
     console.error("Error connecting to notes channel:", err);

@@ -12,6 +12,7 @@ export function useEditorSession() {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       httpOnly: true,
+      path: "/",
     },
     maxAge: 60 * 60 * 24 * 365,
   });

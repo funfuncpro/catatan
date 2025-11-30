@@ -10,43 +10,33 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SharesShareIdRouteImport } from './routes/shares/$shareId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SharesShareIdRoute = SharesShareIdRouteImport.update({
-  id: '/shares/$shareId',
-  path: '/shares/$shareId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/shares/$shareId': typeof SharesShareIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/shares/$shareId': typeof SharesShareIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/shares/$shareId': typeof SharesShareIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/shares/$shareId'
+  fullPaths: '/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/shares/$shareId'
-  id: '__root__' | '/' | '/shares/$shareId'
+  to: '/'
+  id: '__root__' | '/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SharesShareIdRoute: typeof SharesShareIdRoute
 }
 
 declare module '@tanstack/solid-router' {
@@ -58,19 +48,11 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/shares/$shareId': {
-      id: '/shares/$shareId'
-      path: '/shares/$shareId'
-      fullPath: '/shares/$shareId'
-      preLoaderRoute: typeof SharesShareIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SharesShareIdRoute: SharesShareIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

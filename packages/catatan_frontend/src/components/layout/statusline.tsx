@@ -1,21 +1,34 @@
 import { useContext, createMemo } from "solid-js";
-import { EditorContext } from "~/context/editor-client";
 import { CursorContext } from "~/context/cursor";
 import { NotesContext } from "~/context/notes";
 import { ConnectionContext } from "~/context/connection";
+import { YataContext } from "~/context/yata";
 
 export default function StatusLine() {
   const cursorContext = useContext(CursorContext);
   const notesContext = useContext(NotesContext);
   const connectionContext = useContext(ConnectionContext);
+  const yataContext = useContext(YataContext);
 
   const noteIdDisplay = createMemo(() => {
     return notesContext?.notesID() || "Loading...";
   });
 
   const cursorPositionDisplay = createMemo(() => {
-    const line = cursorContext?.line() ?? 1;
-    const column = cursorContext?.column() ?? 1;
+    const afterElement = cursorContext?.afterElement() ?? null;
+    const offset = cursorContext?.cursorOffset() ?? 0;
+
+    const absolutePos =
+      yataContext?.elementToPosition(afterElement, offset) ?? 0;
+
+    const text = yataContext?.getText() ?? "";
+    const textBeforeCursor = text.slice(0, absolutePos);
+
+    const lines = textBeforeCursor.split("\n");
+    const line = lines.length;
+
+    const column = (lines[lines.length - 1]?.length ?? 0) + 1;
+
     return `${line}:${column}`;
   });
 

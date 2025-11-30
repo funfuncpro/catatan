@@ -12,6 +12,7 @@ defmodule CatatanBackend.Application do
       {Phoenix.PubSub, name: CatatanBackend.PubSub},
       {Registry, keys: :unique, name: CatatanBackend.Registry},
       {DynamicSupervisor, strategy: :one_for_one, name: CatatanBackend.NotesSessionSupervisor},
+      {DynamicSupervisor, strategy: :one_for_one, name: CatatanBackend.NotesCrdtSupervisor},
       {Xandra,
        Keyword.put(
          Application.get_env(:catatan_backend, CatatanBackend.CassandraClient),

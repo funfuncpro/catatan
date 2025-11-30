@@ -47,11 +47,17 @@ export interface ChannelCallbacks {
   onReconnectFailed?: () => void;
 }
 
+export interface PushOptions {
+  /** Whether to wait for a server reply. Defaults to true. */
+  expectReply?: boolean;
+}
+
 export interface PhoenixChannel {
   push: <TRequest = unknown, TResponse = unknown>(
     event: string,
     payload: TRequest,
-  ) => Promise<TResponse>;
+    options?: PushOptions,
+  ) => Promise<TResponse | void>;
   leave: () => Promise<void>;
   on: <T = unknown>(event: string, callback: MessageCallback<T>) => void;
   off: (event: string) => void;
@@ -318,13 +324,13 @@ const cleanupState = (state: ChannelState): void => {
 };
 
 export async function websocketConnectFn(
+  url: string,
   topic: string,
   callbacks?: ChannelCallbacks,
   initialEventHandlers?: EventHandlers,
   joinPayload?: Record<string, unknown>,
   config?: WebSocketConfig,
 ): Promise<PhoenixChannel> {
-  const wsURL = getWebsocketURL();
   const channelCallbacks = callbacks || {};
   const mergedConfig: Required<WebSocketConfig> = {
     ...DEFAULT_CONFIG,
@@ -392,7 +398,6 @@ export async function websocketConnectFn(
 
   const connectWebSocket = (): Promise<void> => {
     return new Promise((resolve, reject) => {
-      // Prevent concurrent connection attempts
       if (state.isConnecting) {
         reject(new Error("Connection already in progress"));
         return;
@@ -401,7 +406,7 @@ export async function websocketConnectFn(
       state.isConnecting = true;
       state.isIntentionallyClosed = false;
 
-      const socket = new WebSocket(`${wsURL}?vsn=2.0.0`);
+      const socket = new WebSocket(`${url}?vsn=2.0.0`);
       state.socket = socket;
 
       let hasResolved = false;
@@ -467,7 +472,6 @@ export async function websocketConnectFn(
         state.isConnecting = false;
         channelCallbacks.onClose?.(event);
 
-        // Only schedule reconnect if not intentionally closed and hasn't resolved yet
         if (!state.isIntentionallyClosed && hasResolved) {
           scheduleReconnect();
         }
@@ -480,10 +484,36 @@ export async function websocketConnectFn(
   const push = <TRequest = unknown, TResponse = unknown>(
     event: string,
     payload: TRequest,
-  ): Promise<TResponse> => {
+    options: PushOptions = {},
+  ): Promise<TResponse | void> => {
+    const { expectReply = true } = options;
+
     return new Promise((resolve, reject) => {
       if (!isSocketOpen(state)) {
-        reject(new Error("WebSocket is not connected"));
+        if (expectReply) {
+          reject(new Error("WebSocket is not connected"));
+        } else {
+          resolve();
+        }
+        return;
+      }
+
+      // Fire-and-forget mode: send without waiting for reply
+      if (!expectReply) {
+        try {
+          sendMessage(
+            state,
+            getActiveJoinRef(state),
+            null, // No msgRef means no reply expected
+            state.topic,
+            event,
+            payload,
+          );
+          resolve();
+        } catch (error) {
+          // Silently resolve - fire-and-forget operations are not critical
+          resolve();
+        }
         return;
       }
 
@@ -512,7 +542,6 @@ export async function websocketConnectFn(
           payload,
         );
       } catch (error) {
-        // Clean up the pending callback since send failed
         takePendingCallback(state, msgRef);
         reject(error);
       }
@@ -521,7 +550,6 @@ export async function websocketConnectFn(
 
   return {
     push,
-
     leave: (): Promise<void> => {
       return new Promise((resolve, reject) => {
         state.isIntentionallyClosed = true;

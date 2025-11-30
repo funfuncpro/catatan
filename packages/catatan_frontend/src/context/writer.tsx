@@ -1,47 +1,80 @@
-import { Accessor, createContext, createSignal, JSX } from "solid-js";
+import { Accessor, createContext, createSignal, JSX, Setter } from "solid-js";
 import { Actor } from "~/types/actor";
 
 export interface WriterContextValue {
-  writer: Actor.Writer;
-  collaborators: Accessor<Record<string, Actor.Writer>>;
+  writer: Accessor<Actor.Writer | null>;
+  setWriter: Setter<Actor.Writer | null>;
 
+  collaborators: Accessor<Record<string, Actor.Writer>>;
+  setCollaborators: Setter<Record<string, Actor.Writer>>;
   addCollaborator: (collaborator: Actor.Writer) => void;
   updateCollaborator: (collaborator: Actor.Writer) => void;
   removeCollaborator: (collaboratorId: string) => void;
+
+  initializeFromJoinResponse: (
+    myWriterId: string,
+    writers: Actor.WritersMap,
+  ) => void;
 }
 
 export const WriterContext = createContext<WriterContextValue>();
+
 export function WriterContextProvider(props: {
   children: JSX.Element;
-  writer: Actor.Writer;
+  writer?: Actor.Writer | null;
 }) {
+  const [writer, setWriter] = createSignal<Actor.Writer | null>(
+    props.writer ?? null,
+  );
   const [collaborators, setCollaborators] = createSignal<
     Record<string, Actor.Writer>
   >({});
-  let value: WriterContextValue = {
-    writer: props.writer,
+
+  const addCollaborator = (collaborator: Actor.Writer) => {
+    setCollaborators((prev) => ({
+      ...prev,
+      [collaborator.id]: collaborator,
+    }));
+  };
+
+  const updateCollaborator = (collaborator: Actor.Writer) => {
+    setCollaborators((prev) => ({
+      ...prev,
+      [collaborator.id]: collaborator,
+    }));
+  };
+
+  const removeCollaborator = (collaboratorId: string) => {
+    setCollaborators((prev) => {
+      const updated = { ...prev };
+      delete updated[collaboratorId];
+      return updated;
+    });
+  };
+
+  const initializeFromJoinResponse = (
+    myWriterId: string,
+    writers: Actor.WritersMap,
+  ) => {
+    const myWriter = writers[myWriterId];
+    if (myWriter) {
+      setWriter(myWriter);
+    }
+
+    const otherWriters = { ...writers };
+    delete otherWriters[myWriterId];
+    setCollaborators(otherWriters);
+  };
+
+  const value: WriterContextValue = {
+    writer,
+    setWriter,
     collaborators,
-    addCollaborator: (collaborator: Actor.Writer) => {
-      setCollaborators((prev) => ({
-        ...prev,
-        [collaborator.id]: collaborator,
-      }));
-    },
-    updateCollaborator: (collaborator: Actor.Writer) => {
-      if (!collaborators()[collaborator.id])
-        throw new Error("Collaborator not found");
-      setCollaborators((prev) => ({
-        ...prev,
-        [collaborator.id]: collaborator,
-      }));
-    },
-    removeCollaborator: (collaboratorId: string) => {
-      setCollaborators((prev) => {
-        const updated = { ...prev };
-        delete updated[collaboratorId];
-        return updated;
-      });
-    },
+    setCollaborators,
+    addCollaborator,
+    updateCollaborator,
+    removeCollaborator,
+    initializeFromJoinResponse,
   };
 
   return (

@@ -49,11 +49,16 @@ defmodule CatatanBackend.Actor.Writer do
   end
 
   @doc """
-  Update cursor position of a writer
+  Update cursor position of a writer using YATA element references.
+
+  ## Parameters
+    - writer: The writer struct
+    - after_element: The element ID the cursor is positioned after, or nil for document start
+    - offset: Character offset within the element (default 0)
   """
-  @spec update_cursor_position(t(), non_neg_integer(), non_neg_integer()) :: t()
-  def update_cursor_position(writer, x, y) do
-    new_cursor = Cursor.set_position(writer.cursor, x, y)
+  @spec update_cursor_position(t(), Cursor.element_id(), non_neg_integer()) :: t()
+  def update_cursor_position(writer, after_element, offset \\ 0) do
+    new_cursor = Cursor.set_position(writer.cursor, after_element, offset)
     %{writer | cursor: new_cursor}
   end
 

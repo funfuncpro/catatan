@@ -6,6 +6,7 @@ defmodule CatatanBackend.Server.NotesSession do
   use GenServer
   require Logger
   alias CatatanBackend.Actor.Writer
+  alias CatatanBackend.Cursor
 
   @tick_interval_ms 200
 
@@ -44,10 +45,11 @@ defmodule CatatanBackend.Server.NotesSession do
 
   @doc """
   Called when the frontend sends a cursor update.
+  Uses YATA element references for cursor positioning.
   """
-  @spec update_cursor(String.t(), String.t(), non_neg_integer(), non_neg_integer()) :: :ok
-  def update_cursor(note_id, user_id, x, y) do
-    GenServer.cast(via_tuple(note_id), {:move, user_id, x, y})
+  @spec update_cursor(String.t(), String.t(), Cursor.element_id(), non_neg_integer()) :: :ok
+  def update_cursor(note_id, user_id, after_element, offset \\ 0) do
+    GenServer.cast(via_tuple(note_id), {:move, user_id, after_element, offset})
   end
 
   @doc """
@@ -79,13 +81,13 @@ defmodule CatatanBackend.Server.NotesSession do
   end
 
   @impl true
-  def handle_cast({:move, user_id, x, y}, state) do
+  def handle_cast({:move, user_id, after_element, offset}, state) do
     case Map.get(state.writers, user_id) do
       nil ->
         {:noreply, state}
 
       writer ->
-        updated_writer = Writer.update_cursor_position(writer, x, y)
+        updated_writer = Writer.update_cursor_position(writer, after_element, offset)
         new_writers = Map.put(state.writers, user_id, updated_writer)
         {:noreply, %{state | writers: new_writers, dirty: true}}
     end
