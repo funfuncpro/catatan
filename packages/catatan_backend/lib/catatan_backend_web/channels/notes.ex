@@ -74,8 +74,9 @@ defmodule CatatanBackendWeb.Channels.Notes do
     case NotesValidator.validate_delete(payload) do
       {:ok, %{element_id: element_id}} ->
         notes_id = socket.assigns.notes_id
+        writer_id = socket.assigns.writer_id
 
-        case NotesNew.delete(notes_id, element_id) do
+        case NotesNew.delete(notes_id, element_id, writer_id) do
           {:ok, _element} ->
             {:reply, :ok, socket}
 
@@ -97,8 +98,9 @@ defmodule CatatanBackendWeb.Channels.Notes do
     case NotesValidator.validate_delete_batch(payload) do
       {:ok, %{element_ids: element_ids}} ->
         notes_id = socket.assigns.notes_id
+        writer_id = socket.assigns.writer_id
 
-        case NotesNew.delete_batch(notes_id, element_ids) do
+        case NotesNew.delete_batch(notes_id, element_ids, writer_id) do
           {:ok, result} ->
             {:reply, {:ok, result}, socket}
 
@@ -152,17 +154,24 @@ defmodule CatatanBackendWeb.Channels.Notes do
   end
 
   @impl true
-  def handle_info({:crdt_operation, {:insert, element}}, socket) do
-    push(socket, "remote_insert", %{element: serialize_element(element)})
+  def handle_info({:crdt_operation, {:insert, element}, origin_writer_id}, socket) do
+    # Only push to clients that didn't originate the operation
+    if origin_writer_id != socket.assigns.writer_id do
+      push(socket, "remote_insert", %{element: serialize_element(element)})
+    end
+
     {:noreply, socket}
   end
 
   @impl true
-  def handle_info({:crdt_operation, {:delete, element_id, deleted_at}}, socket) do
-    push(socket, "remote_delete", %{
-      element_id: element_id,
-      deleted_at: DateTime.to_iso8601(deleted_at)
-    })
+  def handle_info({:crdt_operation, {:delete, element_id, deleted_at}, origin_writer_id}, socket) do
+    # Only push to clients that didn't originate the operation
+    if origin_writer_id != socket.assigns.writer_id do
+      push(socket, "remote_delete", %{
+        element_id: element_id,
+        deleted_at: DateTime.to_iso8601(deleted_at)
+      })
+    end
 
     {:noreply, socket}
   end

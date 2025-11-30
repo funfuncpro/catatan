@@ -38,10 +38,11 @@ defmodule CatatanBackend.Server.NotesNew do
   ## Parameters
     - note_id: The note identifier
     - element_id: The encoded element ID (e.g., "writer_id:clock")
+    - writer_id: The writer's ID (for broadcast filtering)
   """
-  @spec delete(String.t(), String.t()) :: {:ok, Element.t()} | {:error, term()}
-  def delete(note_id, element_id) do
-    GenServer.call(via_tuple(note_id), {:delete, element_id})
+  @spec delete(String.t(), String.t(), String.t()) :: {:ok, Element.t()} | {:error, term()}
+  def delete(note_id, element_id, writer_id) do
+    GenServer.call(via_tuple(note_id), {:delete, element_id, writer_id})
   end
 
   @doc """
@@ -50,10 +51,11 @@ defmodule CatatanBackend.Server.NotesNew do
   ## Parameters
     - note_id: The note identifier
     - element_ids: List of encoded element IDs
+    - writer_id: The writer's ID (for broadcast filtering)
   """
-  @spec delete_batch(String.t(), [String.t()]) :: {:ok, map()} | {:error, term()}
-  def delete_batch(note_id, element_ids) do
-    GenServer.call(via_tuple(note_id), {:delete_batch, element_ids})
+  @spec delete_batch(String.t(), [String.t()], String.t()) :: {:ok, map()} | {:error, term()}
+  def delete_batch(note_id, element_ids, writer_id) do
+    GenServer.call(via_tuple(note_id), {:delete_batch, element_ids, writer_id})
   end
 
   @doc """
@@ -108,15 +110,15 @@ defmodule CatatanBackend.Server.NotesNew do
     # Async persistence - fire and forget to Cassandra
     NotesPersistence.save_element(state.note_id, element_with_note)
 
-    # Broadcast to other clients immediately
-    broadcast_operation(state.note_id, {:insert, element_with_note})
+    # Broadcast to other clients (excluding the sender via writer_id)
+    broadcast_operation(state.note_id, {:insert, element_with_note}, writer_id)
 
     # Reply immediately without waiting for DB
     {:reply, {:ok, element_with_note}, %{state | yata: updated_yata}}
   end
 
   @impl true
-  def handle_call({:delete, element_id}, _from, state) do
+  def handle_call({:delete, element_id, writer_id}, _from, state) do
     case Yata.delete(state.yata, element_id) do
       {:ok, updated_yata, deleted_element} ->
         deleted_at = DateTime.utc_now()
@@ -124,8 +126,8 @@ defmodule CatatanBackend.Server.NotesNew do
         # Async persistence - fire and forget to Cassandra
         NotesPersistence.mark_deleted(state.note_id, element_id, deleted_at)
 
-        # Broadcast to other clients immediately
-        broadcast_operation(state.note_id, {:delete, element_id, deleted_at})
+        # Broadcast to other clients (excluding the sender via writer_id)
+        broadcast_operation(state.note_id, {:delete, element_id, deleted_at}, writer_id)
 
         # Reply immediately without waiting for DB
         {:reply, {:ok, deleted_element}, %{state | yata: updated_yata}}
@@ -136,7 +138,7 @@ defmodule CatatanBackend.Server.NotesNew do
   end
 
   @impl true
-  def handle_call({:delete_batch, element_ids}, _from, state) do
+  def handle_call({:delete_batch, element_ids, writer_id}, _from, state) do
     {:ok, updated_yata, deleted_elements, not_found} =
       Yata.delete_batch(state.yata, element_ids)
 
@@ -146,10 +148,10 @@ defmodule CatatanBackend.Server.NotesNew do
     deletions = Enum.map(deleted_elements, fn el -> Element.encode_id(el.id) end)
     NotesPersistence.mark_deleted_batch(state.note_id, deletions, deleted_at)
 
-    # Broadcast each deletion to other clients
+    # Broadcast each deletion to other clients (excluding the sender via writer_id)
     Enum.each(deleted_elements, fn el ->
       element_id = Element.encode_id(el.id)
-      broadcast_operation(state.note_id, {:delete, element_id, deleted_at})
+      broadcast_operation(state.note_id, {:delete, element_id, deleted_at}, writer_id)
     end)
 
     # Reply immediately without waiting for DB
@@ -197,9 +199,14 @@ defmodule CatatanBackend.Server.NotesNew do
     end
   end
 
-  defp broadcast_operation(note_id, operation) do
+  defp broadcast_operation(note_id, operation, writer_id) do
     topic = "notes:#{note_id}"
-    Phoenix.PubSub.broadcast(CatatanBackend.PubSub, topic, {:crdt_operation, operation})
+
+    Phoenix.PubSub.broadcast(
+      CatatanBackend.PubSub,
+      topic,
+      {:crdt_operation, operation, writer_id}
+    )
   end
 
   defp via_tuple(note_id) do

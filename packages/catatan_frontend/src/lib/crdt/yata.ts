@@ -51,6 +51,7 @@ export interface YataDocument {
 
   // Utility
   clone: () => YataDocument;
+  isElementDeleted: (elementId: string) => boolean;
 }
 
 // ============================================================================
@@ -527,6 +528,11 @@ export function createYataDocument(
     return cloned;
   };
 
+  const isElementDeleted = (elementId: string): boolean => {
+    const element = state.elements.get(elementId);
+    return element?.deletedAt !== null && element?.deletedAt !== undefined;
+  };
+
   return {
     toList,
     toListWithDeleted,
@@ -545,5 +551,6 @@ export function createYataDocument(
     getDeleteTargetRange,
     getDelta,
     clone,
+    isElementDeleted,
   };
 }

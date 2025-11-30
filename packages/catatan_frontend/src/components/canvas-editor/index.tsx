@@ -53,6 +53,7 @@ export function CanvasEditor(props: { initialContent?: string }) {
     newState: EditorState,
     operationType: "insert" | "delete" | "replace",
     insertedText?: string,
+    deleteElementIds?: string[],
   ) => {
     setState(newState);
     updateCursorPosition(newState);
@@ -66,10 +67,16 @@ export function CanvasEditor(props: { initialContent?: string }) {
       const insertPos = newState.cursor - insertedText.length;
       editorSyncContext.syncLocalInsert(insertPos, insertedText);
     } else if (operationType === "delete") {
-      const deleteCount = oldLength - newLength;
-      if (deleteCount > 0) {
-        const deletePos = newState.cursor;
-        editorSyncContext.syncLocalDelete(deletePos, deleteCount);
+      // Use pre-calculated element IDs if provided
+      if (deleteElementIds && deleteElementIds.length > 0) {
+        editorSyncContext.syncLocalDeleteByIds(deleteElementIds);
+      } else {
+        // Fallback to position-based delete (less reliable)
+        const deleteCount = oldLength - newLength;
+        if (deleteCount > 0) {
+          const deletePos = newState.cursor;
+          editorSyncContext.syncLocalDelete(deletePos, deleteCount);
+        }
       }
     } else if (operationType === "replace" && insertedText) {
       const selStart = Math.min(
@@ -82,7 +89,10 @@ export function CanvasEditor(props: { initialContent?: string }) {
       );
       const deleteCount = selEnd - selStart;
 
-      if (deleteCount > 0) {
+      // For replace operations, use pre-calculated element IDs if provided
+      if (deleteElementIds && deleteElementIds.length > 0) {
+        editorSyncContext.syncLocalDeleteByIds(deleteElementIds);
+      } else if (deleteCount > 0) {
         editorSyncContext.syncLocalDelete(selStart, deleteCount);
       }
       editorSyncContext.syncLocalInsert(selStart, insertedText);
@@ -247,6 +257,43 @@ export function CanvasEditor(props: { initialContent?: string }) {
     const onKeyDown = (e: KeyboardEvent) => {
       const currentState = state();
       const oldLength = Doc.length(currentState.doc);
+
+      // Pre-calculate delete targets BEFORE the state changes
+      // This is critical for proper CRDT sync
+      let deleteElementIds: string[] = [];
+      if (editorSyncContext) {
+        // Check if this might be a delete operation (backspace, delete key, or selection replacement)
+        const isBackspace = e.key === "Backspace";
+        const isDelete = e.key === "Delete";
+        const hasSelection =
+          currentState.anchor !== null &&
+          currentState.anchor !== currentState.cursor;
+
+        if (isBackspace && !hasSelection) {
+          // Single character backspace - delete char before cursor
+          if (currentState.cursor > 0) {
+            deleteElementIds = editorSyncContext.getDeleteTargetRange(
+              currentState.cursor - 1,
+              1,
+            );
+          }
+        } else if (isDelete && !hasSelection) {
+          // Single character delete - delete char at cursor
+          deleteElementIds = editorSyncContext.getDeleteTargetRange(
+            currentState.cursor,
+            1,
+          );
+        } else if (hasSelection) {
+          // Selection delete/replace
+          const selStart = Math.min(currentState.cursor, currentState.anchor!);
+          const selEnd = Math.max(currentState.cursor, currentState.anchor!);
+          deleteElementIds = editorSyncContext.getDeleteTargetRange(
+            selStart,
+            selEnd - selStart,
+          );
+        }
+      }
+
       const { state: newState, handled } = handleKeyEvent(e, currentState);
 
       if (handled) {
@@ -262,7 +309,13 @@ export function CanvasEditor(props: { initialContent?: string }) {
           );
           applyAndSync(currentState, newState, "insert", insertedText);
         } else if (newLength < oldLength) {
-          applyAndSync(currentState, newState, "delete");
+          applyAndSync(
+            currentState,
+            newState,
+            "delete",
+            undefined,
+            deleteElementIds,
+          );
         } else {
           setState(newState);
           updateCursorPosition(newState);
@@ -386,10 +439,28 @@ export function CanvasEditor(props: { initialContent?: string }) {
     const onCut = (e: ClipboardEvent) => {
       e.preventDefault();
       const currentState = state();
+
+      // Pre-calculate delete targets for cut operation
+      let deleteElementIds: string[] = [];
+      if (editorSyncContext && currentState.anchor !== null) {
+        const selStart = Math.min(currentState.cursor, currentState.anchor);
+        const selEnd = Math.max(currentState.cursor, currentState.anchor);
+        deleteElementIds = editorSyncContext.getDeleteTargetRange(
+          selStart,
+          selEnd - selStart,
+        );
+      }
+
       const { text, state: newState } = cut(currentState);
       if (text && e.clipboardData) {
         e.clipboardData.setData("text/plain", text);
-        applyAndSync(currentState, newState, "delete");
+        applyAndSync(
+          currentState,
+          newState,
+          "delete",
+          undefined,
+          deleteElementIds,
+        );
         resetBlink();
       }
     };
@@ -402,10 +473,28 @@ export function CanvasEditor(props: { initialContent?: string }) {
         const hasSelection =
           currentState.anchor !== null &&
           currentState.anchor !== currentState.cursor;
+
+        // Pre-calculate delete targets for replace operation
+        let deleteElementIds: string[] = [];
+        if (hasSelection && editorSyncContext) {
+          const selStart = Math.min(currentState.cursor, currentState.anchor!);
+          const selEnd = Math.max(currentState.cursor, currentState.anchor!);
+          deleteElementIds = editorSyncContext.getDeleteTargetRange(
+            selStart,
+            selEnd - selStart,
+          );
+        }
+
         const newState = insertText(currentState, text);
 
         if (hasSelection) {
-          applyAndSync(currentState, newState, "replace", text);
+          applyAndSync(
+            currentState,
+            newState,
+            "replace",
+            text,
+            deleteElementIds,
+          );
         } else {
           applyAndSync(currentState, newState, "insert", text);
         }

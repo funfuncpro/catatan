@@ -11,6 +11,8 @@ export interface YataContextValue {
   ) => Promise<CRDT.Element | null>;
   deleteAtPosition: (pos: number) => Promise<boolean>;
   deleteBatchAtPosition: (pos: number, count: number) => Promise<boolean>;
+  deleteBatchByIds: (elementIds: string[]) => Promise<boolean>;
+  getDeleteTargetRange: (pos: number, count: number) => string[];
   integrateRemoteElement: (element: CRDT.SerializedElement) => void;
   markRemoteDeleted: (elementId: string, deletedAt: string) => void;
   markRemoteDeletedBatch: (elementIds: string[], deletedAt: string) => void;
@@ -26,6 +28,7 @@ export interface YataContextValue {
     rightOrigin: CRDT.ElementId | null;
   };
   setChannel: (channel: PhoenixChannel | null) => void;
+  isElementDeleted: (elementId: string) => boolean;
 }
 
 export const YataContext = createContext<YataContextValue>();
@@ -63,7 +66,12 @@ export function YataContextProvider(props: { children: JSX.Element }) {
       if (response && typeof response === "object" && "element" in response) {
         const serverElement = response.element as CRDT.SerializedElement;
 
-        const newDoc = doc.clone();
+        // CRITICAL FIX: Get fresh document reference after async operation
+        // The document may have changed while we were waiting for the server
+        const currentDoc = document();
+        if (!currentDoc) return null;
+
+        const newDoc = currentDoc.clone();
         newDoc.integrateFromServer(serverElement);
         setDocument(newDoc);
 
@@ -102,7 +110,11 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     try {
       await ch.push("delete", { element_id: elementId });
 
-      const newDoc = doc.clone();
+      // CRITICAL FIX: Get fresh document reference after async operation
+      const currentDoc = document();
+      if (!currentDoc) return false;
+
+      const newDoc = currentDoc.clone();
       newDoc.delete(elementId);
       setDocument(newDoc);
 
@@ -163,7 +175,11 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     try {
       await ch.push("delete_batch", { element_ids: elementIds });
 
-      const newDoc = doc.clone();
+      // CRITICAL FIX: Get fresh document reference after async operation
+      const currentDoc = document();
+      if (!currentDoc) return false;
+
+      const newDoc = currentDoc.clone();
       for (const elementId of elementIds) {
         newDoc.delete(elementId);
       }
@@ -174,6 +190,46 @@ export function YataContextProvider(props: { children: JSX.Element }) {
       console.error("Failed to delete batch:", error);
       return false;
     }
+  };
+
+  const deleteBatchByIds = async (elementIds: string[]): Promise<boolean> => {
+    const doc = document();
+    const ch = channel();
+
+    if (!doc || !ch) {
+      console.error("Cannot delete batch: document or channel not initialized");
+      return false;
+    }
+
+    if (elementIds.length === 0) {
+      console.warn("No element IDs provided for deletion");
+      return false;
+    }
+
+    try {
+      await ch.push("delete_batch", { element_ids: elementIds });
+
+      // Get fresh document reference after async operation
+      const currentDoc = document();
+      if (currentDoc) {
+        const newDoc = currentDoc.clone();
+        for (const elementId of elementIds) {
+          newDoc.delete(elementId);
+        }
+        setDocument(newDoc);
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Failed to delete batch by IDs:", error);
+      return false;
+    }
+  };
+
+  const getDeleteTargetRange = (pos: number, count: number): string[] => {
+    const doc = document();
+    if (!doc) return [];
+    return doc.getDeleteTargetRange(pos, count);
   };
 
   const syncWithServer = async () => {
@@ -189,7 +245,11 @@ export function YataContextProvider(props: { children: JSX.Element }) {
       if (response && typeof response === "object" && "elements" in response) {
         const elements = response.elements as CRDT.SerializedElement[];
 
-        const newDoc = doc.clone();
+        // CRITICAL FIX: Get fresh document reference after async operation
+        const currentDoc = document();
+        if (!currentDoc) return;
+
+        const newDoc = currentDoc.clone();
         for (const el of elements) {
           newDoc.integrateFromServer(el);
         }
@@ -228,12 +288,20 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     return doc.getInsertPosition(pos);
   };
 
+  const isElementDeleted = (elementId: string): boolean => {
+    const doc = document();
+    if (!doc) return false;
+    return doc.isElementDeleted(elementId);
+  };
+
   const contextValue: YataContextValue = {
     document,
     initializeDocument,
     insertAtPosition,
     deleteAtPosition,
     deleteBatchAtPosition,
+    deleteBatchByIds,
+    getDeleteTargetRange,
     integrateRemoteElement,
     markRemoteDeleted,
     markRemoteDeletedBatch,
@@ -243,6 +311,7 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     elementToPosition,
     getInsertPosition,
     setChannel,
+    isElementDeleted,
   };
 
   return (

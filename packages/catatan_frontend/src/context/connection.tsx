@@ -136,6 +136,11 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
     const handleRemoteDelete = (payload: RemoteDeletePayload) => {
       if (!yataContext) return;
 
+      // Skip if element is already deleted locally (e.g., this is our own delete echoed back)
+      if (yataContext.isElementDeleted(payload.element_id)) {
+        return;
+      }
+
       const elementIdParts = payload.element_id.split(":");
       if (elementIdParts.length !== 2) {
         console.warn("Invalid element_id format:", payload.element_id);
@@ -166,10 +171,20 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       const { element_ids, deleted_at } = payload;
       if (element_ids.length === 0) return;
 
+      // Filter out elements that are already deleted locally
+      const elementsToDelete = element_ids.filter(
+        (id) => !yataContext.isElementDeleted(id),
+      );
+
+      if (elementsToDelete.length === 0) {
+        // All elements already deleted locally, skip
+        return;
+      }
+
       // Get position of first element before marking deleted
-      const firstElementIdParts = element_ids[0].split(":");
+      const firstElementIdParts = elementsToDelete[0].split(":");
       if (firstElementIdParts.length !== 2) {
-        console.warn("Invalid element_id format:", element_ids[0]);
+        console.warn("Invalid element_id format:", elementsToDelete[0]);
         return;
       }
 
@@ -181,13 +196,13 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
       const pos = yataContext.elementToPosition(firstElementId, 0);
 
       // Mark all elements as deleted in a single update
-      yataContext.markRemoteDeletedBatch(element_ids, deleted_at);
+      yataContext.markRemoteDeletedBatch(elementsToDelete, deleted_at);
 
       if (editorSyncContext && pos >= 0) {
         editorSyncContext.pushRemoteOp({
           type: "delete",
           pos,
-          count: element_ids.length,
+          count: elementsToDelete.length,
         });
       }
     };
