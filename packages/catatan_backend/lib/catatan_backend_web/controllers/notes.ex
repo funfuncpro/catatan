@@ -4,6 +4,8 @@ defmodule CatatanBackendWeb.NotesController do
   alias CatatanBackendWeb.Response
   alias CatatanBackend.Notes
 
+  require Logger
+
   action_fallback CatatanBackendWeb.FallbackController
 
   @moduledoc """
@@ -22,7 +24,9 @@ defmodule CatatanBackendWeb.NotesController do
         |> put_status(:created)
         |> Response.success_response("Note created successfully", note)
 
-      {:error, _reason} ->
+      {:error, reason} ->
+        Logger.error("Failed to create note: #{inspect(reason)}")
+
         conn
         |> put_status(:internal_server_error)
         |> Response.error_response("Failed to create note", %{})
