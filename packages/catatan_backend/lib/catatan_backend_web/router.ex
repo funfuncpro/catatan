@@ -4,7 +4,6 @@ defmodule CatatanBackendWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
     plug :fetch_cookies
-    plug CatatanBackendWeb.Plugs.SessionPlug
   end
 
   pipeline :internal_api do
@@ -17,10 +16,6 @@ defmodule CatatanBackendWeb.Router do
 
     scope "/v1" do
       resources "/notes", NotesController, only: [:show, :create]
-
-      # Session management routes
-      get "/sessions", SessionsController, :index
-      put "/sessions/:id/activate", SessionsController, :activate
 
       # Share routes
       post "/shares", SharesController, :create
