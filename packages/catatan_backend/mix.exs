@@ -59,7 +59,8 @@ defmodule CatatanBackend.MixProject do
       {:ex_aws_sqs, "~> 3.3"},
       {:saxy, "~> 1.1"},
       {:gen_stage, "~> 1.0"},
-      {:gen_smtp, "~> 1.0"}
+      {:gen_smtp, "~> 1.0"},
+      {:joken, "~> 2.6"}
     ]
   end
 
