@@ -6,6 +6,10 @@ defmodule CatatanBackendWeb.Router do
     plug :fetch_cookies
   end
 
+  pipeline :authenticated do
+    plug CatatanBackendWeb.Plugs.AuthPlug, required: true
+  end
+
   pipeline :internal_api do
     plug :accepts, ["json"]
     plug CatatanBackendWeb.Plugs.ApiKey
@@ -20,6 +24,14 @@ defmodule CatatanBackendWeb.Router do
       # Share routes
       post "/shares", SharesController, :create
       resources "/shares", SharesController, only: [:show]
+    end
+
+    # Protected routes requiring authentication
+    scope "/v1" do
+      pipe_through :authenticated
+
+      get "/profile", ProfileController, :show
+      get "/test-auth", TestAuthController, :show
     end
   end
 
