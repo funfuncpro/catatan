@@ -14,6 +14,7 @@ import { HydrationScript } from "solid-js/web";
 import ibmPlexCss from "@ibm/plex-sans/css/ibm-plex-sans-all.css?url";
 import appCss from "~/styles/app.css?url";
 import Command from "~/components/layout/command";
+import { AuthProvider } from "~/context/auth";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -72,10 +73,12 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <RootDocument>
-      <div class="w-full min-h-screen antialiased">
-        <Command />
-        <Outlet />
-      </div>
+      <AuthProvider>
+        <div class="w-full min-h-screen antialiased">
+          <Command />
+          <Outlet />
+        </div>
+      </AuthProvider>
     </RootDocument>
   );
 }
