@@ -3,6 +3,7 @@ import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { DynamoStorage } from "@openauthjs/openauth/storage/dynamo";
 import { subjects } from "./subjects/subject";
+import { sendVerificationCode } from "./lib/send_verification";
 
 export default {
   fetch: issuer({
@@ -53,7 +54,9 @@ export default {
           copy: {
             error_email_taken: "This email is already registered.",
           },
-          sendCode: async (email, code) => {},
+          sendCode: async (email, code) => {
+            await sendVerificationCode(email, code);
+          },
           validatePassword: (password) => {
             if (password.length < 8) {
               return "Password must be at least 8 characters long.";
@@ -78,5 +81,5 @@ export default {
       throw new Error("Invalid providers");
     },
   }).fetch,
-  port: Number(Bun.env.PORT) ?? 8000,
+  port: Bun.env.PORT ? Number(Bun.env.PORT) : 8000,
 };
