@@ -175,29 +175,6 @@ iex -S mix
 
 ---
 
-## Understanding the Architecture
-
-### 1. OTP Application Structure
-
-The application follows OTP principles with a supervision tree defined in `application.ex`:
-
-```
-CatatanBackend.Supervisor
-├── CatatanBackendWeb.Telemetry
-├── DNSCluster
-├── Phoenix.PubSub
-├── Registry                          # Process registry for GenServers
-├── DynamicSupervisor (NotesSessionSupervisor)
-├── DynamicSupervisor (NotesCrdtSupervisor)
-├── Xandra (Cassandra connection)
-├── Email.Producer                    # SQS producer
-├── Email.SQSPoller                   # GenStage producer
-├── Email.Process                     # GenStage consumer
-└── CatatanBackendWeb.Endpoint
-```
-
----
-
 ## Functional Programming Concepts
 
 This codebase utilizes core functional programming paradigms:
