@@ -72,6 +72,7 @@ export interface WebSocketConfig {
   maxReconnectAttempts?: number;
   heartbeatTimeout?: number;
   debug?: boolean;
+  params?: Record<string, string>;
 }
 
 interface ChannelState {
@@ -97,6 +98,7 @@ const DEFAULT_CONFIG: Required<WebSocketConfig> = {
   maxReconnectAttempts: 10,
   heartbeatTimeout: 10000,
   debug: false,
+  params: {},
 };
 
 const createLogger = (debug: boolean) => ({
@@ -406,7 +408,16 @@ export async function websocketConnectFn(
       state.isConnecting = true;
       state.isIntentionallyClosed = false;
 
-      const socket = new WebSocket(`${url}?vsn=2.0.0`);
+      const queryParams = new URLSearchParams();
+      queryParams.append("vsn", "2.0.0");
+      
+      if (state.config.params) {
+        Object.entries(state.config.params).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value);
+        });
+      }
+
+      const socket = new WebSocket(`${url}?${queryParams.toString()}`);
       state.socket = socket;
 
       let hasResolved = false;

@@ -30,9 +30,13 @@ defmodule CatatanBackend.Shares do
       share_id = Map.get(share_data, "share_id")
       existing_permission = Map.get(share_data, "permission_level", "read")
       existing_access_type = Map.get(share_data, "access_type", "public")
+      existing_allowed_emails = Map.get(share_data, "allowed_emails") || []
 
-      # Check if permission or access_type has changed
-      if existing_permission != permission_level or existing_access_type != access_type do
+      # Check if permission, access_type, or allowed_emails has changed
+      emails_changed? = MapSet.new(existing_allowed_emails) != MapSet.new(allowed_emails)
+
+      if existing_permission != permission_level or existing_access_type != access_type or
+           emails_changed? do
         # Update the existing share with new permission/access settings
         with {:ok, _updated_share} <-
                Create.update_share_batch(

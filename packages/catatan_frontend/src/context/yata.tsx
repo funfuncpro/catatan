@@ -4,6 +4,8 @@ import { PhoenixChannel } from "~/lib/websocket";
 
 export interface YataContextValue {
   document: Accessor<YataDocument | null>;
+  permission: Accessor<"read" | "write">; // Added permission accessor
+  setPermission: (p: "read" | "write") => void; // Added setter
   initializeDocument: (noteId: string, writerId: string) => void;
   insertAtPosition: (
     pos: number,
@@ -36,6 +38,7 @@ export const YataContext = createContext<YataContextValue>();
 export function YataContextProvider(props: { children: JSX.Element }) {
   const [document, setDocument] = createSignal<YataDocument | null>(null);
   const [channel, setChannel] = createSignal<PhoenixChannel | null>(null);
+  const [permission, setPermission] = createSignal<"read" | "write">("write"); // Default to write, but should be set by consumer
 
   const initializeDocument = (noteId: string, writerId: string) => {
     const doc = createYataDocument(noteId, writerId);
@@ -46,6 +49,11 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     pos: number,
     content: string,
   ): Promise<CRDT.Element | null> => {
+    if (permission() !== "write") {
+      console.warn("Cannot insert: read-only mode");
+      return null;
+    }
+
     const doc = document();
     const ch = channel();
 
@@ -93,6 +101,11 @@ export function YataContextProvider(props: { children: JSX.Element }) {
   };
 
   const deleteAtPosition = async (pos: number): Promise<boolean> => {
+    if (permission() !== "write") {
+      console.warn("Cannot delete: read-only mode");
+      return false;
+    }
+
     const doc = document();
     const ch = channel();
 
@@ -158,6 +171,11 @@ export function YataContextProvider(props: { children: JSX.Element }) {
     pos: number,
     count: number,
   ): Promise<boolean> => {
+    if (permission() !== "write") {
+      console.warn("Cannot delete batch: read-only mode");
+      return false;
+    }
+
     const doc = document();
     const ch = channel();
 
@@ -193,6 +211,11 @@ export function YataContextProvider(props: { children: JSX.Element }) {
   };
 
   const deleteBatchByIds = async (elementIds: string[]): Promise<boolean> => {
+    if (permission() !== "write") {
+      console.warn("Cannot delete batch by IDs: read-only mode");
+      return false;
+    }
+
     const doc = document();
     const ch = channel();
 
@@ -296,6 +319,8 @@ export function YataContextProvider(props: { children: JSX.Element }) {
 
   const contextValue: YataContextValue = {
     document,
+    permission,
+    setPermission,
     initializeDocument,
     insertAtPosition,
     deleteAtPosition,

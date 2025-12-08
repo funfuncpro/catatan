@@ -5,10 +5,15 @@ defmodule CatatanBackendWeb.Channels.Notes do
   alias CatatanBackend.Server.NotesNew
   alias CatatanBackend.Notes.Crdt.Element
   alias CatatanBackendWeb.NotesValidator
+  alias CatatanBackend.Notes
+  alias CatatanBackend.Shares.Get, as: SharesGet
 
   @impl true
   def join("notes:" <> notes_id, _payload, socket) do
+    current_user = socket.assigns[:current_user]
+
     with {:ok, validated_id} <- NotesValidator.validate_note_id(notes_id),
+         {:ok, permission} <- authorize_access(validated_id, current_user),
          :ok <- ensure_session_started(validated_id),
          :ok <- ensure_crdt_started(validated_id),
          :ok <- ensure_persistence_started(validated_id),
@@ -21,12 +26,23 @@ defmodule CatatanBackendWeb.Channels.Notes do
         |> assign(:notes_id, validated_id)
         |> assign(:writer_id, my_writer.id)
         |> assign(:current_writers, all_writers)
+        |> assign(:permission, permission)
 
-      {:ok, %{my_writer_id: my_writer.id, writers: all_writers}, socket}
+      {:ok, %{my_writer_id: my_writer.id, writers: all_writers, permission: permission}, socket}
     else
-      {:error, errors} ->
+      {:error, :forbidden} ->
+        {:error, %{reason: "forbidden"}}
+
+      {:error, :not_found} ->
+        {:error, %{reason: "not_found"}}
+
+      {:error, errors} when is_map(errors) ->
         Logger.warning("Failed to join note channel: #{notes_id}, errors: #{inspect(errors)}")
         {:error, %{reason: "invalid_note_id", details: errors}}
+
+      error ->
+        Logger.error("Join error: #{inspect(error)}")
+        {:error, %{reason: "internal_error"}}
     end
   rescue
     exception ->
@@ -50,67 +66,79 @@ defmodule CatatanBackendWeb.Channels.Notes do
 
   @impl true
   def handle_in("insert", payload, socket) do
-    case NotesValidator.validate_insert(payload) do
-      {:ok, %{content: content, origin: origin, right_origin: right_origin}} ->
-        writer_id = socket.assigns.writer_id
-        notes_id = socket.assigns.notes_id
+    if socket.assigns.permission == :write do
+      case NotesValidator.validate_insert(payload) do
+        {:ok, %{content: content, origin: origin, right_origin: right_origin}} ->
+          writer_id = socket.assigns.writer_id
+          notes_id = socket.assigns.notes_id
 
-        case NotesNew.insert(notes_id, origin, right_origin, content, writer_id) do
-          {:ok, element} ->
-            {:reply, {:ok, %{element: serialize_element(element)}}, socket}
+          case NotesNew.insert(notes_id, origin, right_origin, content, writer_id) do
+            {:ok, element} ->
+              {:reply, {:ok, %{element: serialize_element(element)}}, socket}
 
-          {:error, reason} ->
-            Logger.error("Insert failed: #{inspect(reason)}")
-            {:reply, {:error, %{reason: inspect(reason)}}, socket}
-        end
+            {:error, reason} ->
+              Logger.error("Insert failed: #{inspect(reason)}")
+              {:reply, {:error, %{reason: inspect(reason)}}, socket}
+          end
 
-      {:error, errors} ->
-        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+        {:error, errors} ->
+          {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+      end
+    else
+      {:reply, {:error, %{reason: "read_only"}}, socket}
     end
   end
 
   @impl true
   def handle_in("delete", payload, socket) do
-    case NotesValidator.validate_delete(payload) do
-      {:ok, %{element_id: element_id}} ->
-        notes_id = socket.assigns.notes_id
-        writer_id = socket.assigns.writer_id
+    if socket.assigns.permission == :write do
+      case NotesValidator.validate_delete(payload) do
+        {:ok, %{element_id: element_id}} ->
+          notes_id = socket.assigns.notes_id
+          writer_id = socket.assigns.writer_id
 
-        case NotesNew.delete(notes_id, element_id, writer_id) do
-          {:ok, _element} ->
-            {:reply, :ok, socket}
+          case NotesNew.delete(notes_id, element_id, writer_id) do
+            {:ok, _element} ->
+              {:reply, :ok, socket}
 
-          {:error, :not_found} ->
-            {:reply, {:error, %{reason: "not_found"}}, socket}
+            {:error, :not_found} ->
+              {:reply, {:error, %{reason: "not_found"}}, socket}
 
-          {:error, reason} ->
-            Logger.error("Delete failed: #{inspect(reason)}")
-            {:reply, {:error, %{reason: inspect(reason)}}, socket}
-        end
+            {:error, reason} ->
+              Logger.error("Delete failed: #{inspect(reason)}")
+              {:reply, {:error, %{reason: inspect(reason)}}, socket}
+          end
 
-      {:error, errors} ->
-        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+        {:error, errors} ->
+          {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+      end
+    else
+      {:reply, {:error, %{reason: "read_only"}}, socket}
     end
   end
 
   @impl true
   def handle_in("delete_batch", payload, socket) do
-    case NotesValidator.validate_delete_batch(payload) do
-      {:ok, %{element_ids: element_ids}} ->
-        notes_id = socket.assigns.notes_id
-        writer_id = socket.assigns.writer_id
+    if socket.assigns.permission == :write do
+      case NotesValidator.validate_delete_batch(payload) do
+        {:ok, %{element_ids: element_ids}} ->
+          notes_id = socket.assigns.notes_id
+          writer_id = socket.assigns.writer_id
 
-        case NotesNew.delete_batch(notes_id, element_ids, writer_id) do
-          {:ok, result} ->
-            {:reply, {:ok, result}, socket}
+          case NotesNew.delete_batch(notes_id, element_ids, writer_id) do
+            {:ok, result} ->
+              {:reply, {:ok, result}, socket}
 
-          {:error, reason} ->
-            Logger.error("Batch delete failed: #{inspect(reason)}")
-            {:reply, {:error, %{reason: inspect(reason)}}, socket}
-        end
+            {:error, reason} ->
+              Logger.error("Batch delete failed: #{inspect(reason)}")
+              {:reply, {:error, %{reason: inspect(reason)}}, socket}
+          end
 
-      {:error, errors} ->
-        {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+        {:error, errors} ->
+          {:reply, {:error, %{reason: "validation_error", details: errors}}, socket}
+      end
+    else
+      {:reply, {:error, %{reason: "read_only"}}, socket}
     end
   end
 
@@ -192,6 +220,55 @@ defmodule CatatanBackendWeb.Channels.Notes do
   end
 
   # --- Private Functions ---
+
+  defp authorize_access(note_id, user) do
+    case Notes.get_note_by_id(note_id) do
+      {:ok, note} ->
+        user_id = if user, do: user.user_id, else: nil
+
+        # Owner has full access
+        # Allow if owners match OR if both are nil (Anonymous creator)
+        if note["owner_id"] == user_id do
+          {:ok, :write}
+        else
+          check_share_access(note_id, user)
+        end
+
+      {:error, :not_found} ->
+        {:error, :not_found}
+
+      _ ->
+        {:error, :internal_error}
+    end
+  end
+
+  defp check_share_access(note_id, user) do
+    case SharesGet.by_note_id(note_id) do
+      {:ok, share} ->
+        access_type = share["access_type"]
+        allowed_emails = share["allowed_emails"] || []
+        permission_level = share["permission_level"]
+
+        perm_atom = if permission_level == "write", do: :write, else: :read_only
+
+        cond do
+          access_type == "public" ->
+            {:ok, perm_atom}
+
+          access_type == "private" and user != nil and user.email in allowed_emails ->
+            {:ok, perm_atom}
+
+          true ->
+            {:error, :forbidden}
+        end
+
+      {:error, :not_found} ->
+        {:error, :forbidden}
+
+      _ ->
+        {:error, :internal_error}
+    end
+  end
 
   defp ensure_session_started(note_id) do
     case DynamicSupervisor.start_child(

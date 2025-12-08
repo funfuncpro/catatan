@@ -2,11 +2,13 @@ import { Notes } from "~/types/note";
 import { Actor } from "~/types/actor";
 import { CRDT } from "~/lib/crdt";
 import { websocketConnectFn, PhoenixChannel } from "./websocket";
+import { tokenStorage } from "./auth";
 
 /** Response received when joining the notes channel */
 export interface JoinResponse {
   my_writer_id: string;
   writers: Actor.WritersMap;
+  permission: "read" | "write";
 }
 
 /** Presence state event payload from server */
@@ -56,33 +58,45 @@ export async function createNotesChannel({
   const connectionKey = `notes:${noteID}`;
   const url = `${import.meta.env.VITE_API_URL}/socket/notes/websocket`;
 
+  // Get token for authentication
+  const token = tokenStorage.getAccessToken() || "";
+
   try {
-    const channel = await websocketConnectFn(url, connectionKey, {
-      onJoin(response) {
-        console.log("Connected to notes channel:", response);
-        setIsConnected(true);
+    const channel = await websocketConnectFn(
+      url,
+      connectionKey,
+      {
+        onJoin(response) {
+          console.log("Connected to notes channel:", response);
+          setIsConnected(true);
 
-        // The server returns { my_writer_id: string, writers: { id: Writer, ... } }
-        const joinResponse = response as unknown as JoinResponse;
+          // The server returns { my_writer_id: string, writers: { id: Writer, ... } }
+          const joinResponse = response as unknown as JoinResponse;
 
-        if (joinResponse.writers && joinResponse.my_writer_id) {
-          onJoinSuccess?.(joinResponse);
-        }
-      },
+          if (joinResponse.writers && joinResponse.my_writer_id) {
+            onJoinSuccess?.(joinResponse);
+          }
+        },
 
-      onJoinError: (error) => {
-        console.error("Failed to join WebSocket channel:", error);
-        setIsConnected(false);
+        onJoinError: (error) => {
+          console.error("Failed to join WebSocket channel:", error);
+          setIsConnected(false);
+        },
+        onError: (error) => {
+          console.error("WebSocket error:", error);
+          setIsConnected(false);
+        },
+        onClose: (event) => {
+          console.log("WebSocket closed:", event.code);
+          setIsConnected(false);
+        },
       },
-      onError: (error) => {
-        console.error("WebSocket error:", error);
-        setIsConnected(false);
+      undefined,
+      undefined,
+      {
+        params: { token },
       },
-      onClose: (event) => {
-        console.log("WebSocket closed:", event.code);
-        setIsConnected(false);
-      },
-    });
+    );
 
     // Register event handlers
     if (channel) {
@@ -153,6 +167,33 @@ export async function createNewNote() {
       return {
         data: null,
         error: error.message ?? "Failed to create note",
+      };
+    });
+}
+
+export async function claimNote(noteId: string) {
+  const token = tokenStorage.getAccessToken();
+  if (!token) return { error: "Not authenticated" };
+
+  return fetch(`${import.meta.env.VITE_API_URL}/api/v1/notes/${noteId}/claim`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to claim note");
+      }
+      return await response.json();
+    })
+    .catch((error) => {
+      console.error("Failed to claim note:", error);
+      return {
+        success: false,
+        message: error.message,
       };
     });
 }

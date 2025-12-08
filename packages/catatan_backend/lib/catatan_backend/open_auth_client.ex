@@ -10,8 +10,13 @@ defmodule CatatanBackend.OpenAuthClient do
 
   require Logger
 
-  @issuer_url Application.compile_env(:catatan_backend, :openauth_issuer_url, "http://localhost:5000")
-  @jwks_url "#{@issuer_url}/.well-known/jwks.json"
+  defp issuer_url do
+    Application.get_env(:catatan_backend, :openauth_issuer_url, "http://localhost:5000")
+  end
+
+  defp jwks_url do
+    "#{issuer_url()}/.well-known/jwks.json"
+  end
 
   @doc """
   Verifies and decodes a JWT access token from OpenAuth.
@@ -42,7 +47,7 @@ defmodule CatatanBackend.OpenAuthClient do
   """
   @spec fetch_jwks() :: {:ok, map()} | {:error, term()}
   def fetch_jwks do
-    case Req.get(@jwks_url) do
+    case Req.get(jwks_url()) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 

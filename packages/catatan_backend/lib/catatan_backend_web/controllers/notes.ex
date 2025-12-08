@@ -17,8 +17,14 @@ defmodule CatatanBackendWeb.NotesController do
   def create(conn, params) do
     {:ok, _validated_data} = NotesValidator.validate_notes_creation(params)
 
-    # owner_id is nil for now (anonymous notes)
-    case Notes.create_note(nil) do
+    owner_id =
+      if conn.assigns[:current_user] do
+        conn.assigns.current_user.user_id
+      else
+        nil
+      end
+
+    case Notes.create_note(owner_id) do
       {:ok, note} ->
         conn
         |> put_status(:created)
@@ -30,6 +36,32 @@ defmodule CatatanBackendWeb.NotesController do
         conn
         |> put_status(:internal_server_error)
         |> Response.error_response("Failed to create note", %{})
+    end
+  end
+
+  def claim(conn, %{"id" => note_id}) do
+    user_id = conn.assigns.current_user.user_id
+
+    case Notes.claim_note(note_id, user_id) do
+      {:ok, note} ->
+        conn
+        |> put_status(:ok)
+        |> Response.success_response("Note claimed successfully", note)
+
+      {:error, :already_owned} ->
+        conn
+        |> put_status(:forbidden)
+        |> Response.error_response("This note is already owned by another user", %{})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> Response.error_response("Note not found", %{})
+
+      {:error, _reason} ->
+        conn
+        |> put_status(:internal_server_error)
+        |> Response.error_response("Failed to claim note", %{})
     end
   end
 

@@ -51,7 +51,7 @@ defmodule CatatanBackend.Email.SQSPoller do
         fetched = poll_from_sqs(queue_url, fetch_count)
 
         if length(fetched) == 0 do
-          Logger.debug("No messages found, retrying in #{backoff}ms")
+          # Logger.debug("No messages found, retrying in #{backoff}ms")
           Process.send_after(self(), :poll_retry, backoff)
           next_backoff = min(backoff * 2, @max_backoff)
           {[], [], pending_demand, next_backoff}
@@ -89,7 +89,7 @@ defmodule CatatanBackend.Email.SQSPoller do
          |> SQS.receive_message(max_number_of_messages: limit, wait_time_seconds: 10)
          |> ExAws.request() do
       {:ok, %{body: %{messages: messages}} = _response} ->
-        Logger.info("Found #{length(messages)} messages in SQS")
+        # Logger.info("Found #{length(messages)} messages in SQS")
 
         Enum.reduce(messages, [], fn message, acc ->
           case Jason.decode(message.body) do

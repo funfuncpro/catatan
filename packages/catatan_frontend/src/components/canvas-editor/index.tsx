@@ -27,14 +27,18 @@ import { calcScrollOffset } from "./editor/viewport";
 import { CursorContext } from "~/context/cursor";
 import { YataContext } from "~/context/yata";
 import { EditorSyncContext } from "~/context/editor-sync";
+import { ConnectionContext } from "~/context/connection";
 
-export function CanvasEditor(props: { initialContent?: string }) {
+export function CanvasEditor(props: { initialContent?: string; readOnly?: boolean }) {
   let canvasRef!: HTMLCanvasElement;
   let animationId: number;
 
   const cursorContext = useContext(CursorContext);
   const yataContext = useContext(YataContext);
   const editorSyncContext = useContext(EditorSyncContext);
+  const connectionContext = useContext(ConnectionContext);
+
+  const isReadOnly = () => props.readOnly || (connectionContext?.permission() === "read");
 
   const [state, setState] = createSignal<EditorState>(
     createState(props.initialContent ?? ""),
@@ -193,6 +197,12 @@ export function CanvasEditor(props: { initialContent?: string }) {
         lastBlink = time;
       }
 
+      // If read-only and no selection, hide cursor.
+      // Or simply: if read-only, hide cursor unless we want to show it for navigation.
+      // A common pattern: show cursor for navigation, but don't blink it? Or behave normally?
+      // Let's stick to normal behavior for now, maybe hide it if desired later.
+      // But user cannot TYPE.
+      
       const currentState = state();
       const canvasWidth = canvasRef.width / dpr;
       const canvasHeight = canvasRef.height / dpr;
@@ -235,7 +245,7 @@ export function CanvasEditor(props: { initialContent?: string }) {
         rc,
         currentState,
         layout,
-        cursorVisible,
+        cursorVisible, // Could pass props.readOnly to hide cursor if needed
         cursorContext?.remoteCursors(),
         yataContext?.elementToPosition,
       );
@@ -254,7 +264,22 @@ export function CanvasEditor(props: { initialContent?: string }) {
       };
     };
 
+    const isNavigationKey = (e: KeyboardEvent) => {
+        const navKeys = [
+            "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+            "Home", "End", "PageUp", "PageDown"
+        ];
+        // Allow Copy (Ctrl+C) and Select All (Ctrl+A)
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'a')) return true;
+        return navKeys.includes(e.key);
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isReadOnly() && !isNavigationKey(e)) {
+        e.preventDefault();
+        return;
+      }
+
       const currentState = state();
       const oldLength = Doc.length(currentState.doc);
 
@@ -415,6 +440,8 @@ export function CanvasEditor(props: { initialContent?: string }) {
 
     const onCut = (e: ClipboardEvent) => {
       e.preventDefault();
+      if (isReadOnly()) return; // Block cut in read-only
+
       const currentState = state();
 
       // Pre-calculate delete targets for cut operation
@@ -444,6 +471,8 @@ export function CanvasEditor(props: { initialContent?: string }) {
 
     const onPaste = (e: ClipboardEvent) => {
       e.preventDefault();
+      if (isReadOnly()) return; // Block paste in read-only
+
       const text = e.clipboardData?.getData("text/plain");
       if (text) {
         const currentState = state();

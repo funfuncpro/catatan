@@ -71,6 +71,10 @@ if config_env() == :prod do
          :frontend_host,
          System.get_env("FRONTEND_HOST") || "https://catatan.app"
 
+  config :catatan_backend,
+         :openauth_issuer_url,
+         System.get_env("OPENAUTH_ISSUER_URL") || "https://auth.catatan.app"
+
   config :catatan_backend, CatatanBackendWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [

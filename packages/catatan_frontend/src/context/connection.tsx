@@ -30,6 +30,7 @@ export interface ConnectionContextValue {
   channel: Accessor<PhoenixChannel | null>;
   setIsConnected: Setter<boolean>;
   activeWriterId: Accessor<string | null>;
+  permission: Accessor<"read" | "write">;
 }
 
 export const ConnectionContext = createContext<ConnectionContextValue>();
@@ -38,6 +39,7 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
   const [isConnected, setIsConnected] = createSignal<boolean>(false);
   const [channel, setChannel] = createSignal<PhoenixChannel | null>(null);
   const [activeWriterId, setActiveWriterId] = createSignal<string | null>(null);
+  const [permission, setPermission] = createSignal<"read" | "write">("write");
 
   const notesContext = useContext(NotesContext);
   const cursorContext = useContext(CursorContext);
@@ -50,6 +52,7 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
     setIsConnected,
     channel,
     activeWriterId,
+    permission,
   };
 
   createEffect(() => {
@@ -63,8 +66,11 @@ export function ConnectionContextProvider(props: { children: JSX.Element }) {
     let channelInstance: PhoenixChannel | null = null;
 
     const handleJoinSuccess = (response: JoinResponse) => {
-      const { my_writer_id, writers } = response;
+      const { my_writer_id, writers, permission: perm } = response;
       setActiveWriterId(my_writer_id);
+      if (perm) {
+        setPermission(perm);
+      }
 
       if (yataContext) {
         yataContext.initializeDocument(noteID, my_writer_id);

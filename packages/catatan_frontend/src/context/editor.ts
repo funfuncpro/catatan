@@ -36,3 +36,11 @@ export const updateEditorSessionFn = createServerFn({ method: "POST" })
       return { success: false };
     }
   });
+
+export const clearEditorSessionFn = createServerFn({ method: "POST" }).handler(
+  async () => {
+    const session = await useEditorSession();
+    await session.clear();
+    return { success: true };
+  },
+);

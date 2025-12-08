@@ -74,6 +74,44 @@ defmodule CatatanBackend.Notes do
     Store.exists?(note_id)
   end
 
+  @doc """
+  Claims an anonymous note for a registered user.
+  """
+  @spec claim_note(String.t(), String.t()) ::
+          {:ok, map()} | {:error, :already_owned | :not_found | term()}
+  def claim_note(note_id, user_id) do
+    case Store.get_metadata(note_id) do
+      {:ok, metadata} ->
+        current_owner = metadata["owner_id"]
+
+        cond do
+          is_nil(current_owner) ->
+            # Anonymous note -> Claim it
+            case Store.update_owner(note_id, user_id) do
+              {:ok, :updated} ->
+                {:ok, Map.put(metadata, "owner_id", user_id)}
+
+              error ->
+                error
+            end
+
+          current_owner == user_id ->
+            # Already owned by this user -> Success (idempotent)
+            {:ok, metadata}
+
+          true ->
+            # Owned by someone else -> Error
+            {:error, :already_owned}
+        end
+
+      {:error, :not_found} ->
+        {:error, :not_found}
+
+      error ->
+        error
+    end
+  end
+
   # --- Live/Realtime Operations (YATA CRDT-based) ---
 
   @doc """

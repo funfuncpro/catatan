@@ -105,43 +105,6 @@ src/
 
 ---
 
-## Architecture
-
-### High-Level Data Flow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        User Interface                           │
-│  ┌─────────────┐    ┌────────────────┐    ┌─────────────────┐   │
-│  │   Header    │    │  CanvasEditor  │    │   StatusLine    │   │
-│  └─────────────┘    └───────┬────────┘    └─────────────────┘   │
-└─────────────────────────────┼───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     Context Providers                           │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │ NotesContext → YataContext → CursorContext →            │    │
-│  │ EditorSyncContext → WriterContext → ConnectionContext   │    │
-│  └─────────────────────────────────────────────────────────┘    │
-└─────────────────────────────┼───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       Core Libraries                            │
-│  ┌───────────────┐    ┌────────────────┐    ┌───────────────┐   │
-│  │   YATA CRDT   │    │   WebSocket    │    │   Rope Data   │   │
-│  │  (lib/crdt)   │    │  (lib/notes)   │    │   Structure   │   │
-│  └───────────────┘    └────────────────┘    └───────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                     ┌────────────────┐
-                     │  Backend API   │
-                     │  (WebSocket)   │
-                     └────────────────┘
-```
-
 ### Context Provider Hierarchy
 
 The application uses nested context providers for state management:
@@ -166,7 +129,8 @@ The application uses nested context providers for state management:
 
 ## Functional Programming Concepts
 
-The codebase heavily employs functional programming principles. Here's how:
+The codebase heavily employs functional programming principles (but not all). 
+Here's all of the application of functional programming concepts in this project:
 
 ### 1. Immutability
 
@@ -221,37 +185,7 @@ export const moveLeft = (state: EditorState): EditorState => {
 - No mutations, no side effects
 - Predictable and testable
 
-### 3. Function Composition
-
-Complex operations are built by composing smaller functions.
-
-```typescript
-// src/lib/crdt/yata.ts
-
-const buildSortedList = (
-  elementsMap: Map<string, CRDT.Element>,
-  heads: CRDT.Element[],
-  originMap: Map<string | null, CRDT.Element[]>,
-): CRDT.Element[] => {
-  const result: CRDT.Element[] = [];
-  const queue = [...heads];
-
-  while (queue.length > 0) {
-    const element = queue.shift()!;
-    result.push(element);
-
-    // Compose: get children → sort by YATA rules → add to queue
-    const childKey = CRDT.ElementId.encode(element.id);
-    const children = originMap.get(childKey) ?? [];
-    const sortedChildren = sortConflicting(elementsMap, children);
-    queue.unshift(...sortedChildren);
-  }
-
-  return result;
-};
-```
-
-### 4. Higher-Order Functions
+### 3. Higher-Order Functions
 
 Functions that take or return other functions.
 
@@ -287,7 +221,7 @@ export const mapLines = (
 };
 ```
 
-### 5. Algebraic Data Types (ADTs)
+### 4. Algebraic Data Types (ADTs)
 
 Using TypeScript unions and discriminated unions for type-safe modeling.
 
@@ -323,7 +257,7 @@ export const charAt = (rope: Rope, index: number): string => {
 };
 ```
 
-### 6. Recursion over Iteration
+### 5. Recursion over Iteration
 
 Many algorithms use recursion, especially for tree structures.
 
@@ -345,108 +279,6 @@ const isReachable = (
 
   return isReachable(elementsMap, next, targetId);  // Recursive call
 };
-```
-
-### 7. Declarative over Imperative
-
-Using declarative constructs like `map`, `filter`, `reduce` over `for` loops.
-
-```typescript
-// src/components/canvas-editor/operation/document.ts
-
-const shiftFormats = (
-  formats: FormatSpan[],
-  pos: number,
-  amount: number,
-): FormatSpan[] =>
-  formats.map((f) => ({      // Declarative transformation
-    ...f,
-    start: f.start >= pos ? f.start + amount : f.start,
-    end: f.end >= pos ? f.end + amount : f.end,
-  }));
-
-const shrinkFormats = (
-  formats: FormatSpan[],
-  pos: number,
-  amount: number,
-): FormatSpan[] =>
-  formats
-    .map((f) => { /* transform */ })
-    .filter((f): f is FormatSpan => f !== null);  // Chain operations
-```
-
-### 8. Namespace Pattern for Related Functions
-
-Grouping related pure functions in namespaces (similar to modules in FP languages).
-
-```typescript
-// src/types/crdt.ts
-
-export namespace CRDT {
-  export type ElementId = [string, number];
-  
-  export const ElementId = {
-    encode(id: ElementId | null): string | null { /* ... */ },
-    decode(key: string | null): ElementId | null { /* ... */ },
-    equals(a: ElementId | null, b: ElementId | null): boolean { /* ... */ },
-    compare(a: ElementId, b: ElementId): number { /* ... */ },
-  };
-}
-```
-
-### 9. Option/Maybe Pattern
-
-Using `null` as the absence of value, with proper type safety.
-
-```typescript
-// Instead of exceptions, return null for "not found"
-
-export const getDeleteTarget = (pos: number): string | null => {
-  const elements = toList();
-  let currentPos = 0;
-
-  for (const el of elements) {
-    const len = el.content.length;
-    if (currentPos + len > pos) {
-      return CRDT.ElementId.encode(el.id);
-    }
-    currentPos += len;
-  }
-
-  return null;  // Explicit "not found"
-};
-```
-
-### 10. Generators for Lazy Evaluation
-
-Using generators for memory-efficient iteration.
-
-```typescript
-// src/components/canvas-editor/operation/rope.ts
-
-export function* chars(rope: Rope): Generator<string> {
-  if (rope.kind === "leaf") {
-    for (const c of rope.text) yield c;
-  } else {
-    yield* chars(rope.left);
-    yield* chars(rope.right);
-  }
-}
-
-export function* lines(rope: Rope): Generator<string> {
-  let current = "";
-  for (const c of chars(rope)) {
-    if (c === "\n") {
-      yield current;
-      current = "";
-    } else {
-      current += c;
-    }
-  }
-  if (current.length > 0 || rope.length === 0) {
-    yield current;
-  }
-}
 ```
 
 ---
@@ -522,39 +354,6 @@ Custom text editor rendered entirely on HTML Canvas.
 - No DOM reflow issues
 
 ---
-
-## Understanding the Codebase
-
-### Entry Points
-
-1. **`src/routes/__root.tsx`** - App shell, global layout
-2. **`src/routes/index.tsx`** - Main editor page with all context providers
-3. **`src/components/canvas-editor/index.tsx`** - Editor component
-
-### Adding a New Feature
-
-1. **State**: Add to relevant context in `src/context/`
-2. **Logic**: Pure functions in `src/lib/` or operation files
-3. **UI**: Components in `src/components/`
-4. **Types**: Define in `src/types/`
-
-### Testing Changes
-
-Since the codebase uses pure functions extensively, you can:
-
-1. Unit test pure functions directly
-2. Test CRDT operations in isolation
-3. Test document operations without UI
-
-### Key Patterns to Understand
-
-1. **Signal-based Reactivity**: SolidJS signals (`createSignal`, `createEffect`)
-2. **Context for Global State**: `createContext` + `useContext`
-3. **Server Functions**: `createServerFn` for SSR data loading
-4. **Immutable Updates**: Always spread and create new objects
-
----
-
 ## License
 
 Private - All rights reserved.
