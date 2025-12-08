@@ -7,7 +7,7 @@ defmodule CatatanBackend.Notes.Store do
 
   alias CatatanBackend.CassandraClient
   alias CatatanBackend.Notes.Crdt.{Yata, Element}
-  alias CatatanBackend.Notes.Crdt.Store.Yata, as: YataStore
+  alias CatatanBackend.Notes.Crdt.Store, as: YataStore
 
   @doc """
   Creates a new note with metadata.
@@ -103,6 +103,22 @@ defmodule CatatanBackend.Notes.Store do
     case get_metadata(note_id) do
       {:ok, _} -> true
       _ -> false
+    end
+  end
+
+  @doc """
+  Updates the owner of a note.
+  """
+  @spec update_owner(String.t(), String.t()) :: {:ok, :updated} | {:error, term()}
+  def update_owner(note_id, new_owner_id) do
+    query = "UPDATE notes SET owner_id = :owner_id WHERE id = :id"
+    params = %{"id" => note_id, "owner_id" => new_owner_id}
+
+    with {:ok, prepared} <- CassandraClient.prepare(query),
+         {:ok, _result} <- CassandraClient.execute(prepared, params) do
+      {:ok, :updated}
+    else
+      {:error, reason} -> {:error, {:cassandra, reason}}
     end
   end
 

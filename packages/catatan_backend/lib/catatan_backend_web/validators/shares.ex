@@ -22,12 +22,13 @@ defmodule CatatanBackendWeb.SharesValidator do
 
     {%{}, types}
     |> cast(params, Map.keys(types))
-    |> validate_required([:note_id, :access_type, :allowed_emails])
-    |> validate_required([:note_id, :access_type, :allowed_emails])
+    |> validate_required([:note_id, :access_type])
     |> validate_length(:note_id, min: 1)
-    |> validate_inclusion(:access_type, ["public", "restricted"])
+    |> validate_inclusion(:access_type, ["public", "private"])
     |> validate_inclusion(:permission_level, ["read", "write"])
     |> put_default_permission_level()
+    |> put_default_allowed_emails()
+    |> validate_private_share()
     |> case do
       %Ecto.Changeset{valid?: true, changes: changes} ->
         {:ok, changes}
@@ -37,10 +38,28 @@ defmodule CatatanBackendWeb.SharesValidator do
     end
   end
 
-  # Helper function to set default permission_level if not provided
   defp put_default_permission_level(changeset) do
     if get_field(changeset, :permission_level) == nil do
       put_change(changeset, :permission_level, "read")
+    else
+      changeset
+    end
+  end
+
+  defp put_default_allowed_emails(changeset) do
+    if get_field(changeset, :allowed_emails) == nil do
+      put_change(changeset, :allowed_emails, [])
+    else
+      changeset
+    end
+  end
+
+  defp validate_private_share(changeset) do
+    access_type = get_field(changeset, :access_type)
+    allowed_emails = get_field(changeset, :allowed_emails)
+
+    if access_type == "private" and (allowed_emails == nil or allowed_emails == []) do
+      add_error(changeset, :allowed_emails, "must be provided for private shares")
     else
       changeset
     end

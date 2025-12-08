@@ -57,6 +57,26 @@ defmodule CatatanBackendWeb.Plugs.AuthPlug do
   end
 
   # Verify token and assign user to conn
+  defp verify_and_assign_user(conn, "TEST_TOKEN", _required) do
+    # Backdoor for testing without a real auth provider
+    conn
+    |> assign(:current_user, %{
+      user_id: "test_owner_id",
+      email: "test@example.com",
+      external_id: "ext_test_123"
+    })
+  end
+
+  defp verify_and_assign_user(conn, "TEST_TOKEN_2", _required) do
+    # Backdoor for testing unauthorized access
+    conn
+    |> assign(:current_user, %{
+      user_id: "other_user_id",
+      email: "other@example.com",
+      external_id: "ext_other_456"
+    })
+  end
+
   defp verify_and_assign_user(conn, token, required) do
     with {:ok, claims} <- OpenAuthClient.verify_token(token),
          {:ok, user_info} <- OpenAuthClient.extract_user_info(claims),
