@@ -52,30 +52,34 @@ catatan_backend/
 │   ├── catatan_backend/                # Business logic (contexts)
 │   │   ├── application.ex              # OTP Application supervision tree
 │   │   ├── cassandra_client.ex         # Database client wrapper
+│   │   ├── open_auth_client.ex         # OpenAuth JWT verification
 │   │   ├── generate.ex                 # ID generation utilities
 │   │   ├── cursor.ex                   # Cursor position in CRDT documents
+│   │   ├── mailer.ex                   # Mailer configuration
+│   │   ├── migrator.ex                 # Database migration runner
 │   │   │
 │   │   ├── notes.ex                    # Notes context public API
 │   │   ├── notes/
 │   │   │   ├── store.ex                # Notes persistence layer
-│   │   │   ├── crdt.ex                 # CRDT representation
-│   │   │   ├── lww.ex                  # Last-Write-Wins register
 │   │   │   └── crdt/
 │   │   │       ├── yata.ex             # YATA CRDT implementation
 │   │   │       ├── element.ex          # CRDT element structure
 │   │   │       ├── state_vector.ex     # Version vector tracking
 │   │   │       ├── sync.ex             # Delta synchronization
-│   │   │       └── store/              # CRDT persistence
+│   │   │       └── store.ex            # CRDT persistence
 │   │   │
-│   │   ├── sessions.ex                 # Sessions context public API
-│   │   ├── sessions/
-│   │   │   ├── create.ex               # Session creation
-│   │   │   └── get.ex                  # Session retrieval
+│   │   ├── users.ex                    # Users context public API
+│   │   ├── users/
+│   │   │   ├── create.ex               # User creation/upsert
+│   │   │   └── get.ex                  # User retrieval
 │   │   │
 │   │   ├── shares.ex                   # Shares context public API
 │   │   ├── shares/
 │   │   │   ├── create.ex               # Share link creation
 │   │   │   └── get.ex                  # Share link retrieval
+│   │   │
+│   │   ├── api_key.ex                  # API Key context
+│   │   ├── api_key/                    # API Key logic (generate, parse, store)
 │   │   │
 │   │   ├── server/                     # GenServers for stateful processes
 │   │   │   ├── notes_session.ex        # Tracks writers/cursors per note
@@ -97,7 +101,9 @@ catatan_backend/
 │       ├── controllers/                # REST API controllers
 │       ├── channels/
 │       │   └── notes.ex                # WebSocket channel for real-time
-│       ├── plugs/                      # Request middleware
+│       ├── sockets/
+│       │   └── notes.ex                # WebSocket authentication
+│       ├── plugs/                      # Request middleware (Auth, API Key)
 │       └── validators/                 # Input validation
 │
 ├── config/                             # Environment configurations
