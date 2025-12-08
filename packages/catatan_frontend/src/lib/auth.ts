@@ -1,5 +1,6 @@
 import { createClient } from "@openauthjs/openauth/client";
 import { subjects } from "./subjects";
+import { clearEditorSessionFn } from "~/context/editor";
 
 const ISSUER_URL = "http://localhost:5000";
 const CLIENT_ID = "catatan-web";
@@ -22,19 +23,23 @@ export const authClient = createClient({
  */
 export const tokenStorage = {
   getAccessToken: (): string | null => {
+    if (typeof window === "undefined") return null;
     return localStorage.getItem(ACCESS_TOKEN_KEY);
   },
 
   getRefreshToken: (): string | null => {
+    if (typeof window === "undefined") return null;
     return localStorage.getItem(REFRESH_TOKEN_KEY);
   },
 
   setTokens: (accessToken: string, refreshToken: string): void => {
+    if (typeof window === "undefined") return;
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   },
 
   clearTokens: (): void => {
+    if (typeof window === "undefined") return;
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
   },
@@ -43,8 +48,11 @@ export const tokenStorage = {
 /**
  * Initiate login by redirecting to OpenAuth
  */
-export async function login() {
+export async function login(currentNoteId?: string | null) {
   try {
+    if (currentNoteId) {
+      localStorage.setItem("pending_claim_note_id", currentNoteId);
+    }
     const { url } = await authClient.authorize(REDIRECT_URI, "code");
     window.location.href = url;
   } catch (error) {
@@ -90,8 +98,9 @@ export async function handleCallback(code: string): Promise<boolean> {
 /**
  * Logout - clear tokens
  */
-export function logout() {
+export async function logout() {
   tokenStorage.clearTokens();
+  await clearEditorSessionFn();
   window.location.href = "/";
 }
 

@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/solid-router";
 import { createSignal, onMount } from "solid-js";
 import { handleCallback } from "~/lib/auth";
 import { useAuth } from "~/context/auth";
+import { claimNote } from "~/lib/notes";
 
 export const Route = createFileRoute("/auth/callback")({
   component: AuthCallback,
@@ -31,6 +32,19 @@ function AuthCallback() {
       if (success) {
         // Refresh auth state to pick up the new tokens
         await auth.refreshUser();
+
+        // Check for pending anonymous note claim
+        const pendingNoteId = localStorage.getItem("pending_claim_note_id");
+        if (pendingNoteId) {
+          try {
+            console.log("Attempting to claim pending note:", pendingNoteId);
+            await claimNote(pendingNoteId);
+            // We claim best-effort, if it fails (e.g. already owned), we continue
+            localStorage.removeItem("pending_claim_note_id");
+          } catch (e) {
+            console.error("Error claiming note:", e);
+          }
+        }
 
         // Redirect to home page after successful authentication
         navigate({ to: "/" });
